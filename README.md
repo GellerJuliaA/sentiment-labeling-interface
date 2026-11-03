@@ -10,7 +10,7 @@ Participants read IMDb movie reviews and decide whether each reviewer liked the 
 1. Open the live link and click the ticket, then **Get started**.
 2. Enter a uniqname and continue.
 3. Read the 6-step tutorial, then do 2 practice reviews (each shows the right answer after you check it).
-4. Label the reviews: choose Positive or Negative, rate confidence 1–5, click **Next review**. Two attention checks are mixed in. Every answer is sent to the Google Sheet backend as it's made; the done screen confirms the upload.
+4. Label the reviews: choose Positive or Negative, rate confidence 1–5, click **Next review**. Two attention checks are mixed in. Every answer is sent to the Google Sheet backend as it's made; the done screen confirms the upload and offers **Label 5 more**.
 
 ## Study design
 
@@ -18,32 +18,37 @@ Participants read IMDb movie reviews and decide whether each reviewer liked the 
 - **Instructions and warm-up.** The tutorial first explains what to judge (the reviewer's own feelings about the movie after watching, with Positive and Negative defined), then the four things that commonly mislead: sad stories, opinions about characters, a few complaints, and plot summaries. These came out of the A2 error analysis. A worked example and two practice reviews with feedback follow.
 - **Batches and resuming.** A batch is 5 reviews plus the attention checks. After a batch, participants can click **Label 5 more** to get a new random batch in the same session (same `session_id` and uniqname, no tutorial again). **Save & exit** saves progress, and Home in that browser offers **Resume**. A reload mid-review also resumes.
 - **Attention checks.** Two instructed-response items ("choose Negative", "choose Positive") in every batch, one at random in each half. Missing one is recorded; missing both within a batch ends the session, and the participant can start over.
-- **Additional measurement: confidence.** After each label, participants rate how sure they are (1–5). This shows whether AI assistance changes how confident people feel, and whether confidence tracks correctness, which matters for appropriate reliance on AI. Time per review (`activeMs`, excluding time the tab was hidden) is also logged automatically, with nothing extra asked of participants.
+- **Additional measurement: confidence.** After each label, participants rate how sure they are (1–5). This shows whether AI assistance changes how confident people feel, and whether confidence tracks correctness, which matters for appropriate reliance on AI.
 
 ## What gets recorded
 
-Records go to three tabs of the Google Sheet (and are mirrored in the participant's browser as a backup). Every tab starts with `saved_time`, added by the backend. Labels use the dataset's coding: 1 = positive, 0 = negative. Times are in seconds.
-
-**trials**: one row per review or attention check.
+Only what the analysis needs. Each answer is one row in the Google Sheet's **trials** tab:
 
 | Column | Meaning |
 | --- | --- |
-| `record_type`, `record_id` | Always `trial`; a unique ID per row |
-| `session_id`, `uniqname`, `condition`, `study_version` | Who, which run, and which version of the study |
-| `batch_number`, `item_number`, `item_type` | Which batch (1, 2, …); position in the session (1–7 in batch 1, 8–14 in batch 2, …); `review` or `attention_check` |
-| `review_id`, `review_word_count` | Row number in the study CSV; review length |
-| `true_label`, `participant_label`, `is_correct` | Correct answer, what the participant picked, 1 if they match |
+| `saved_time` | When the sheet received the row (added by the backend) |
+| `uniqname` | Participant |
+| `session_id` | One ID per person per browser session (separates repeat attempts) |
+| `condition` | `no_ai` (or `ai` in the other version) |
+| `batch_number` | 1 for the first 5 reviews, 2 after "Label 5 more", and so on |
+| `item_type` | `review` or `attention_check` |
+| `review_id` | Row number in the study CSV (`AC1`/`AC2` for attention checks) |
+| `true_label` | Correct answer: 1 = positive, 0 = negative |
+| `participant_label` | What the participant picked |
 | `confidence` | 1 (guessing) to 5 (certain) |
-| `time_on_item_sec`, `active_time_sec`, `hidden_time_sec` | Time from the review appearing to clicking Next; the same minus time the tab was hidden; the hidden time |
-| `time_to_first_choice_sec`, `times_answer_changed` | Time until the first Positive/Negative click; how often they switched |
-| `ai_label` | SmolLM2's A2 label (never shown in this condition) |
-| `after_page_reload`, `shown_time`, `submitted_time` | True if they reloaded during this item; timestamps |
 
-**sessions**: a row when the reviews start (`status` = `started`), when someone uses Save & exit (`paused`), after each finished batch (`complete`), and if the attention checks end the session (`terminated`). Totals are cumulative, so a session's last row covers everything. Columns: `reviews_assigned`, `reviews_done`, `reviews_correct`, `accuracy`, `mean_confidence`, `mean_active_time_sec`, `attention_checks_failed`, `practice_correct_first_try`, `batches_completed`, `setup_time_sec` (instructions + practice), `task_time_sec` (time on items, breaks excluded), `total_time_sec` (since start, breaks included), `started_time`, `recorded_time`.
+**Attention checks.** They're saved in the same tab as the reviews, with `item_type` = `attention_check`. `review_id` says which check it was, and `true_label` holds its right answer:
 
-**feedback**: anything sent from the Give feedback tab (`uniqname`, `feedback`, `submitted_time`).
+| `review_id` | Text participants see | Right answer (`true_label`) |
+| --- | --- | --- |
+| `AC1` | "This is an attention check, not a movie review. To show you’re reading carefully, choose Negative, then any confidence level." | 0 (Negative) |
+| `AC2` | "Quick attention check: this isn’t a real review. Please choose Positive, then any confidence level." | 1 (Positive) |
 
-**Analysis notes.** Drop duplicate `record_id`s (a retried upload can arrive twice). Use each `session_id`'s last session row. A last row of `paused` or `started` means they never finished a batch; `terminated` means they missed both checks in a batch. If someone completed more than once, keep their first complete session. Files participants download and email you leave out `true_label`, `is_correct`, `ai_label`, `reviews_correct`, and `accuracy`; re-score them from `review_id`.
+A check is passed when `participant_label` equals `true_label`.
+
+Messages from the Give feedback tab go to a **feedback** tab (`uniqname`, `condition`, `feedback`).
+
+**Analysis notes.** Correctness is `participant_label == true_label`. The AI's label for each review is in `reviews.json` / the study CSV, joined on `review_id`. Attention-check rows show who failed a check; anyone who missed both in one batch was stopped and restarted under a new `session_id`. Files participants download and email you leave out `true_label`; re-score them from `review_id`.
 
 ## Setup
 
@@ -53,7 +58,7 @@ Records go to three tabs of the Google Sheet (and are mirrored in the participan
 python make_reviews_json.py imdb_study_dataset_Julia_Geller.csv
 ```
 
-This writes `reviews.json` (`id`, `text`, `label`, `ai_label`), converts the reviews' `<br />` tags to line breaks, and prints review lengths and time estimates.
+This writes `reviews.json` (`id`, `text`, `label`, `ai_label`), and converts the reviews' `<br />` tags to line breaks.
 
 **2. Set up the backend (Google Sheet + Apps Script).**
 
@@ -61,7 +66,7 @@ This writes `reviews.json` (`id`, `text`, `label`, `ai_label`), converts the rev
 2. Replace the default code with `apps_script.gs` and save.
 3. **Deploy → New deployment**, type **Web app**, execute as **Me**, access **Anyone**. Authorize it, then copy the web-app URL (ends in `/exec`).
 4. Paste that URL into `CONFIG.ENDPOINT` near the top of the script in `index.html`.
-5. Open the URL in a browser; it should say the backend is running. Do one test session and check the Sheet's `trials` and `sessions` tabs.
+5. Open the URL in a browser; it should say the backend is running. Do one test session and check the Sheet's `trials` tab.
 
 If your umich Google account doesn't allow **Anyone** access, deploy from a personal Gmail account instead. After editing the script later, use **Manage deployments → Edit → New version**, or the URL keeps serving the old code.
 

@@ -461,7 +461,6 @@ th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
 const CONFIG = {
   // Which arm of the study this page is. Every saved record carries it.
   CONDITION: "no_ai",
-  STUDY_VERSION: "a3-no-ai-v4",
   // Real reviews per participant. The two attention checks are added on top.
   N_TRIALS: 5,
   // The study dataset (built from the A2 CSV by make_reviews_json.py).
@@ -516,7 +515,7 @@ var COPY = {
     nameLabel: "Your uniqname",
     namePlaceholder: "e.g. janedoe",
     nameHint: "The part of your UMich email before @umich.edu.",
-    consent: "We’ll record your uniqname, your answers, your confidence ratings, and how long each review takes. Answers are used only for this class project.",
+    consent: "We’ll record your uniqname, your answers, and your confidence ratings. Answers are used only for this class project.",
     continueBtn: "Continue",
     nameRequired: "Enter your uniqname to continue.",
   },
@@ -621,7 +620,7 @@ var COPY = {
     heading: "About this study",
     intro: "This study is part of a Human-AI Interaction class project at the University of Michigan. It looks at how accurately, confidently, and quickly people can tell whether a movie review is positive or negative.",
     recordHeading: "What we record",
-    recordBody: "Your uniqname, each answer and confidence rating, and how long each review took. Nothing else is collected, and the data is used only for this class project.",
+    recordBody: "Your uniqname and each answer and confidence rating. Nothing else is collected, and the data is used only for this class project.",
     sourceHeading: "Where the reviews come from",
     sourceBody: "The reviews come from the <strong>Large Movie Review Dataset</strong> (Maas et al., 2011): 50,000 IMDb user reviews, each labeled positive or negative from the reviewer’s star rating. This study uses 200 reviews randomly sampled from its training split. The original labels are never shown to you; they’re used afterwards to score answers.",
     citation: "Maas, A. L., Daly, R. E., Pham, P. T., Huang, D., Ng, A. Y., &amp; Potts, C. (2011). Learning Word Vectors for Sentiment Analysis. <em>Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics (ACL 2011)</em>, 142–150.",
@@ -638,7 +637,7 @@ var COPY = {
   data: {
     heading: "Collected data (this browser)",
     intro: "Records submitted from this browser. The full data from every participant is in the Google Sheet behind the backend.",
-    statLabels: ["review answers", "completed sessions", "waiting to upload"],
+    statLabels: ["review answers", "people", "waiting to upload"],
     backendOn: "Backend: sending records to your Apps Script endpoint.",
     backendOff: "Backend: not set. Add your Apps Script URL to CONFIG.ENDPOINT.",
     csvBtn: "Download CSV",
@@ -646,7 +645,7 @@ var COPY = {
     retryBtn: "Retry upload",
     clearBtn: "Clear this browser’s data",
     clearConfirm: "Delete every record stored in this browser? Records already uploaded to the Google Sheet are not affected.",
-    tableHeaders: ["Participant", "Item", "Gold", "Answer", "Conf.", "Seconds", "Submitted"],
+    tableHeaders: ["Uniqname", "Item", "True label", "Answer", "Confidence"],
     reviewItem: "Review #{id}",
     checkItem: "Check {id}",
   },
@@ -753,7 +752,7 @@ async function flushQueue(){
     const res = await fetch(CONFIG.ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ records: batch }),
+      body: JSON.stringify({ records: batch.map(({ record_id, ...row }) => row) }),
     });
     const out = await res.json();
     if(!out.ok) throw new Error(out.error || "backend rejected the records");
@@ -796,9 +795,8 @@ let state = {
   practiceChecked: false,
   practiceSel: null,
   taskSel: null,
-  trial: null,         // timing info for the review on screen
+  trial: null,         // the item on screen
 };
-let resumedAfterReload = false; // flags the trial a participant returns to after reloading mid-task
 function saveSession(){ lsSet("session", state.session); }
 
 /* ======================= NAV / SCREENS ======================= */
@@ -1091,7 +1089,6 @@ function startTask(){
   s.stage = "task";
   s.taskStartedAt = Date.now();
   saveSession();
-  queueRecord(sessionRecord("started"));
   renderTask();
 }
 function itemContent(item){
@@ -1120,69 +1117,35 @@ function renderTask(){
   next.textContent = pos === total - 1 ? COPY.task.lastBtn : COPY.task.nextBtn;
   next.disabled = true;
 
-  const now = performance.now();
-  state.trial = {
-    item, content,
-    shownAt: now, shownAtIso: new Date().toISOString(),
-    firstLabelMs: null, labelChanges: 0,
-    hiddenMs: 0, hiddenSince: document.hidden ? now : null,
-    afterReload: resumedAfterReload,
-  };
-  resumedAfterReload = false;
+  state.trial = { item, content };
   state.taskSel = buildChoice("task", (field, v, prev, sel) => {
-    if(field === "label"){
-      if(prev === null) state.trial.firstLabelMs = Math.round(performance.now() - state.trial.shownAt);
-      else if(prev !== v) state.trial.labelChanges++;
-    }
     next.disabled = sel.label === null || sel.confidence === null;
   });
   show("screen-task");
 }
-// Time spent with the tab hidden is tracked so it can be excluded from reading time.
-document.addEventListener("visibilitychange", () => {
-  const t = state.trial; if(!t) return;
-  if(document.hidden) t.hiddenSince = performance.now();
-  else if(t.hiddenSince !== null){ t.hiddenMs += performance.now() - t.hiddenSince; t.hiddenSince = null; }
-});
 
 document.getElementById("task-next-btn").addEventListener("click", () => {
   const s = state.session, t = state.trial, sel = state.taskSel;
   if(!s || !t || sel.label === null || sel.confidence === null) return;
-  const now = performance.now();
-  const hiddenMs = Math.round(t.hiddenMs + (t.hiddenSince !== null ? now - t.hiddenSince : 0));
-  const rtMs = Math.round(now - t.shownAt);
   const isCheck = t.item.type === "check";
-  const sec = (ms) => Math.round(ms / 10) / 100; // milliseconds -> seconds, 2 decimals
-  // These keys become the column names in the Google Sheet's "trials" tab.
+  // Apart from record_type (which tab it goes to) and record_id (used for retries),
+  // these keys are the columns of the Google Sheet's "trials" tab.
   const rec = {
     record_type: "trial",
     record_id: uid(),
-    session_id: s.sessionId,
     uniqname: s.participant,
+    session_id: s.sessionId,
     condition: CONFIG.CONDITION,
-    study_version: CONFIG.STUDY_VERSION,
     batch_number: s.batchNumber || 1,
-    item_number: s.progress + 1,
     item_type: isCheck ? "attention_check" : "review",
     review_id: t.item.id,                      // row number in the study CSV
-    review_word_count: wordCount(t.content.text),
     true_label: t.content.gold,                // 1 = positive, 0 = negative
     participant_label: sel.label,
-    is_correct: sel.label === t.content.gold ? 1 : 0,
     confidence: sel.confidence,                // 1-5
-    time_on_item_sec: sec(rtMs),               // review shown -> Next clicked
-    active_time_sec: sec(rtMs - hiddenMs),     // same, minus time the tab was hidden
-    hidden_time_sec: sec(hiddenMs),
-    time_to_first_choice_sec: t.firstLabelMs === null ? null : sec(t.firstLabelMs),
-    times_answer_changed: t.labelChanges,
-    ai_label: (!isCheck && t.content.review.ai_label !== undefined) ? t.content.review.ai_label : null, // never shown in this condition
-    after_page_reload: t.afterReload,
-    shown_time: t.shownAtIso,
-    submitted_time: new Date().toISOString(),
   };
   queueRecord(rec);
   state.trial = null;
-  if(isCheck && !rec.is_correct){ s.attentionFails++; s.batchAttentionFails = (s.batchAttentionFails || 0) + 1; }
+  if(isCheck && sel.label !== t.content.gold){ s.attentionFails++; s.batchAttentionFails = (s.batchAttentionFails || 0) + 1; }
   s.progress++;
   saveSession();
   // Missing both checks within one batch ends the session.
@@ -1194,7 +1157,6 @@ document.getElementById("task-next-btn").addEventListener("click", () => {
 document.getElementById("exit-btn").addEventListener("click", () => {
   if(!confirm(COPY.task.exitConfirm)) return;
   // The session stays "in_progress" in this browser, so Home offers Resume.
-  queueRecord(sessionRecord("paused"));
   state.trial = null;
   renderHome();
 });
@@ -1203,7 +1165,6 @@ function terminateSession(){
   const s = state.session;
   s.status = "terminated";
   saveSession();
-  queueRecord(sessionRecord("terminated"));
   show("screen-terminated");
 }
 document.getElementById("term-restart-btn").addEventListener("click", () => renderIdScreen());
@@ -1215,7 +1176,6 @@ function finishSession(){
   if(!s.taskEndedAt) s.taskEndedAt = Date.now();
   s.batchesCompleted = (s.batchesCompleted || 0) + 1;
   saveSession();
-  queueRecord(sessionRecord("complete"));
   renderDone();
 }
 // "Label 5 more": same session and uniqname, a fresh random batch (no tutorial or practice).
@@ -1234,41 +1194,6 @@ function startNextBatch(){
 }
 document.getElementById("done-more-btn").addEventListener("click", startNextBatch);
 
-/* ======================= SESSION SUMMARY RECORD ======================= */
-function sessionRecord(status, extra){
-  const s = state.session;
-  const reviews = getDB().filter(r => r.record_type === "trial" && r.session_id === s.sessionId && r.item_type === "review");
-  const n = reviews.length;
-  const nCorrect = reviews.reduce((a, r) => a + r.is_correct, 0);
-  const mean = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length * 1000) / 1000 : null;
-  const now = Date.now();
-  // These keys become the column names in the Google Sheet's "sessions" tab.
-  return Object.assign({
-    record_type: "session",
-    record_id: uid(),
-    session_id: s.sessionId,
-    uniqname: s.participant,
-    condition: CONFIG.CONDITION,
-    study_version: CONFIG.STUDY_VERSION,
-    status,                                    // started, paused, complete (after each batch), or terminated
-    reviews_assigned: s.items.filter(i => i.type === "review").length,
-    reviews_done: n,
-    reviews_correct: nCorrect,
-    accuracy: n ? Math.round(nCorrect / n * 10000) / 10000 : null,
-    mean_confidence: mean(reviews.map(r => r.confidence)),
-    mean_active_time_sec: mean(reviews.map(r => r.active_time_sec)),
-    attention_checks_failed: s.attentionFails,
-    practice_correct_first_try: s.practiceFirstTryCorrect,
-    batches_completed: s.batchesCompleted || 0,
-    setup_time_sec: s.taskStartedAt ? Math.round((s.taskStartedAt - s.startedAt) / 1000) : null,   // instructions + practice
-    task_time_sec: Math.round(getDB().filter(r => r.record_type === "trial" && r.session_id === s.sessionId)
-                     .reduce((a, r) => a + r.active_time_sec, 0)),                              // time on items, breaks excluded
-    total_time_sec: Math.round((now - s.startedAt) / 1000),                                      // since start, breaks included
-    started_time: new Date(s.startedAt).toISOString(),
-    recorded_time: new Date(now).toISOString(),
-  }, extra || {});
-}
-
 /* ======================= DONE ======================= */
 function renderDone(){
   const sid = state.session ? state.session.sessionId : null;
@@ -1286,7 +1211,7 @@ function renderDone(){
 document.getElementById("done-retry-btn").addEventListener("click", () => { lastSyncFailed = false; flushQueue(); });
 // Participants' copy leaves out the correct labels, the AI's labels, and their score,
 // since they may still do the other version of the study. review_id lets you re-score it.
-const HIDDEN_FROM_PARTICIPANTS = ["true_label", "is_correct", "ai_label", "reviews_correct", "accuracy"];
+const HIDDEN_FROM_PARTICIPANTS = ["true_label", "record_type", "record_id"];
 document.getElementById("done-download-btn").addEventListener("click", () => {
   const s = state.session;
   if(!s) return;
@@ -1305,9 +1230,8 @@ document.getElementById("feedback-submit-btn").addEventListener("click", () => {
   queueRecord({
     record_type: "feedback", record_id: uid(),
     uniqname: state.session ? state.session.participant : "anonymous",
-    session_id: state.session ? state.session.sessionId : null,
-    condition: CONFIG.CONDITION, study_version: CONFIG.STUDY_VERSION,
-    feedback: text, submitted_time: new Date().toISOString(),
+    condition: CONFIG.CONDITION,
+    feedback: text,
   });
   document.getElementById("feedback-text").value = "";
   document.getElementById("feedback-confirm").textContent = COPY.feedback.confirmMsg;
@@ -1318,7 +1242,7 @@ function renderDataStats(){
   const db = getDB();
   const [l1, l2, l3] = COPY.data.statLabels;
   const nTrials = db.filter(r => r.record_type === "trial" && r.item_type === "review").length;
-  const nDone = db.filter(r => r.record_type === "session" && r.status === "complete").length;
+  const nDone = new Set(db.filter(r => r.record_type === "trial").map(r => r.uniqname)).size;
   document.getElementById("data-stats").innerHTML = `
     <div class="stat"><b>${nTrials}</b><span>${l1}</span></div>
     <div class="stat"><b>${nDone}</b><span>${l2}</span></div>
@@ -1331,7 +1255,7 @@ function renderDataView(){
   const rows = getDB().filter(r => r.record_type === "trial").slice().reverse();
   document.querySelector("#data-table tbody").innerHTML = rows.map(r => {
     const item = r.item_type === "review" ? fmt(COPY.data.reviewItem, { id: escapeHtml(r.review_id) }) : fmt(COPY.data.checkItem, { id: escapeHtml(r.review_id) });
-    return `<tr><td>${escapeHtml(r.uniqname)}</td><td>${item}</td><td>${labelName(r.true_label)}</td><td>${labelName(r.participant_label)}${r.is_correct ? "" : " ✗"}</td><td>${r.confidence}</td><td>${r.active_time_sec.toFixed(1)}</td><td>${new Date(r.submitted_time).toLocaleString()}</td></tr>`;
+    return `<tr><td>${escapeHtml(r.uniqname)}</td><td>${item}</td><td>${labelName(r.true_label)}</td><td>${labelName(r.participant_label)}${r.participant_label === r.true_label ? "" : " ✗"}</td><td>${r.confidence}</td></tr>`;
   }).join("");
   show("screen-data");
 }
@@ -1471,10 +1395,7 @@ function applyStaticCopy(){
   flushQueue();
   setInterval(flushQueue, 15000);
   // A reload in the middle of a session drops the participant back where they were.
-  if(state.session && state.session.status === "in_progress"){
-    resumedAfterReload = state.session.stage === "task";
-    resumeSession();
-  }
+  if(state.session && state.session.status === "in_progress") resumeSession();
   else show("screen-landing");
 })();
 </script>

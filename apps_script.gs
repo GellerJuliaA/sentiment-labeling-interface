@@ -6,12 +6,12 @@
 
 /**
  * Backend for the movie review study: receives records from index.html and
- * appends them to tabs of this Google Sheet ("trials", "sessions", "feedback").
+ * appends them to tabs of this Google Sheet ("trials" and "feedback").
  * Columns are created automatically from the record fields.
  *
  * Setup: see README.md ("Backend setup").
  */
-const SHEET_FOR_KIND = { trial: "trials", session: "sessions", feedback: "feedback" };
+const SHEET_FOR_KIND = { trial: "trials", feedback: "feedback" };
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -49,7 +49,10 @@ function appendRecords_(ss, tabName, recs) {
   let headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].filter(String) : [];
   if (headers.length === 0) headers = ["saved_time"];
   recs.forEach(function (r) {
-    Object.keys(r).forEach(function (k) { if (headers.indexOf(k) === -1) headers.push(k); });
+    Object.keys(r).forEach(function (k) {
+      // record_type only says which tab a row goes in, so it doesn't get a column
+      if (k !== "record_type" && headers.indexOf(k) === -1) headers.push(k);
+    });
   });
   const firstEmptyRow = Math.max(sh.getLastRow(), 1) + 1;
   const now = new Date();
