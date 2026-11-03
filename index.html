@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Movie Review Project</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-deep:#0b1330;
+  --bg-deep2:#111c42;
+  --panel:#ffffff;
+  --panel-soft:#f3f5fb;
+  --ink:#171f38;
+  --ink-soft:#5b6480;
+  --line:#e3e6f0;
+  --cta:#1a7f72;
+  --cta-dark:#146a5f;
+  --gold:#f2b84b;
+  --ticket:#f4ead1;
+  --ticket-ink:#b5433a;
+  --pos:#2f8f5b;
+  --neg:#c8463d;
+  --radius:16px;
+}
+*{box-sizing:border-box;}
+[hidden]{display:none !important;}
+html,body{margin:0;padding:0;}
+body{font-family:'Inter',system-ui,sans-serif; background:var(--bg-deep); color:var(--ink); min-height:100vh; display:flex; flex-direction:column;}
+h1,h2,h3{font-family:'Fraunces',Georgia,serif; color:var(--ink); line-height:1.15;}
+button{font-family:inherit; cursor:pointer;}
+:focus-visible{outline:3px solid var(--gold); outline-offset:2px;}
+.screen{display:none;}
+.screen.active{display:block; flex:1 0 auto;}
+
+/* ---------- NAV ---------- */
+#navbar{display:none; position:sticky; top:0; z-index:40; background:var(--bg-deep2); padding:14px 24px;
+  align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border-bottom:1px solid rgba(255,255,255,0.08);}
+#navbar.show{display:flex;}
+.brand{color:#fff; font-family:'Fraunces',serif; font-weight:600; font-size:18px; display:flex; align-items:center; gap:8px;}
+.brand-dot{width:9px; height:9px; border-radius:50%; background:var(--gold); display:inline-block;}
+.nav-links{display:flex; gap:6px; flex-wrap:wrap;}
+.nav-btn{background:transparent; border:none; color:#c7cde2; padding:8px 14px; border-radius:999px; font-size:14px; font-weight:600;}
+.nav-btn:hover{color:#fff;}
+.nav-btn.active{background:rgba(255,255,255,0.1); color:#fff;}
+@media(max-width:640px){ #navbar{padding:12px 16px;} .nav-btn{padding:6px 10px; font-size:13px;} }
+
+/* ---------- LAYOUT ---------- */
+.page-wrap{max-width:780px; margin:0 auto; padding:36px 24px 80px;}
+.center-wrap{max-width:760px; margin:0 auto; padding:40px 24px 80px; display:flex; flex-direction:column; align-items:center; text-align:center;}
+.card{background:var(--panel); border-radius:var(--radius); padding:32px; box-shadow:0 20px 50px -25px rgba(10,15,40,0.5);}
+.content-card{background:var(--panel); border-radius:20px; padding:36px; box-shadow:0 20px 50px -25px rgba(10,15,40,0.5);}
+.content-card h2{font-size:26px; margin-top:0;}
+.content-card p{color:var(--ink-soft); font-size:15.5px; line-height:1.7;}
+.content-card h3{font-size:16px; margin-bottom:6px;}
+.center{text-align:center;}
+@media(max-width:640px){ .page-wrap{padding:24px 14px 60px;} .content-card, .card{padding:24px 20px;} }
+
+/* ---------- LANDING (ticket) ---------- */
+#screen-landing{
+  position:relative; overflow:hidden; text-align:center;
+  background:
+    radial-gradient(1px 1px at 10% 20%, #fff, transparent),
+    radial-gradient(1px 1px at 80% 10%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 60% 30%, #fff, transparent),
+    radial-gradient(1px 1px at 30% 60%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 90% 70%, #fff, transparent),
+    radial-gradient(1px 1px at 45% 80%, #fff, transparent),
+    linear-gradient(180deg, #0a1230 0%, #16225a 60%, #1c2c6b 100%);
+}
+/* display lives in this .active-gated rule (not the bare ID rule) so the
+   ID selector can't override .screen{display:none} — same fix as A1. */
+#screen-landing.active{display:flex; align-items:center; justify-content:center; flex:1 0 auto;}
+.landing-inner{position:relative; z-index:2; color:#fff; padding:24px;}
+#ticket-scene{transition:opacity .4s ease, transform .4s ease;}
+#ticket-scene.fading{opacity:0; transform:translateY(-16px); pointer-events:none;}
+#ticket-scene.gone{display:none;}
+.ticket-wrap{display:inline-block; filter:drop-shadow(0 18px 28px rgba(0,0,0,0.55)); margin-bottom:22px;}
+.ticket{display:flex; background:none; border:none; padding:0; transition:transform .25s ease;}
+.ticket:hover{transform:translateY(-4px) rotate(-1.5deg);}
+.ticket-main,.ticket-stub{background:var(--ticket); color:var(--ticket-ink); display:flex; flex-direction:column; justify-content:center;}
+.ticket-main{
+  padding:22px 30px; text-align:left; border-radius:8px 0 0 8px;
+  -webkit-mask:radial-gradient(circle 10px at 100% 0, #0000 98%, #000) top/100% 51% no-repeat,
+               radial-gradient(circle 10px at 100% 100%, #0000 98%, #000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle 10px at 100% 0, #0000 98%, #000) top/100% 51% no-repeat,
+               radial-gradient(circle 10px at 100% 100%, #0000 98%, #000) bottom/100% 51% no-repeat;
+}
+.ticket-stub{
+  padding:22px 18px; border-left:2px dashed rgba(181,67,58,0.45); border-radius:0 8px 8px 0;
+  transition:transform .55s cubic-bezier(.4,.2,.2,1), opacity .55s ease;
+  -webkit-mask:radial-gradient(circle 10px at 0 0, #0000 98%, #000) top/100% 51% no-repeat,
+               radial-gradient(circle 10px at 0 100%, #0000 98%, #000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle 10px at 0 0, #0000 98%, #000) top/100% 51% no-repeat,
+               radial-gradient(circle 10px at 0 100%, #0000 98%, #000) bottom/100% 51% no-repeat;
+}
+.ticket-admit{font-family:'Fraunces',serif; font-style:italic; font-size:15px;}
+.ticket-title{font-family:'Fraunces',serif; font-weight:700; font-size:25px; line-height:1.1; margin-top:4px; max-width:11ch;}
+.ticket-stub span{font-size:12.5px; font-weight:700; line-height:1.5; text-align:center;}
+.ticket.torn .ticket-stub{transform:translate(46px,70px) rotate(26deg); opacity:0;}
+.ticket-hint{font-size:14px; opacity:0.85;}
+.letter{display:none; max-width:480px; background:#fbf6e9; color:#2c2410; border-radius:10px; padding:36px 32px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.6); text-align:left; font-family:'Fraunces',serif; font-size:17px; line-height:1.6;}
+.letter.show{display:block; animation:fadeUp .6s ease;}
+@keyframes fadeUp{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
+.letter-title{font-size:23px; font-weight:700; margin-bottom:12px;}
+#continue-btn{margin-top:20px;}
+
+/* ---------- BUTTONS ---------- */
+.btn{border:none; border-radius:999px; padding:13px 26px; font-size:15px; font-weight:700; display:inline-flex; align-items:center; gap:8px;}
+.btn-primary{background:var(--cta); color:#fff;}
+.btn-primary:hover{background:var(--cta-dark);}
+.btn-dark{background:rgba(255,255,255,0.14); color:#fff; border:1.5px solid rgba(255,255,255,0.75);}
+.btn-dark:hover{background:rgba(255,255,255,0.22); border-color:#fff;}
+.btn-outline{background:transparent; color:var(--ink); border:1.5px solid var(--line);}
+.btn-outline:hover{border-color:var(--ink);}
+.btn-danger{background:transparent; color:var(--neg); border:1.5px solid var(--neg);}
+.btn-small{padding:8px 16px; font-size:13px;}
+.btn-block{width:100%; justify-content:center;}
+.btn:disabled{opacity:0.4; cursor:not-allowed;}
+
+/* ---------- HOME ---------- */
+.tag{display:inline-block; background:rgba(47,184,166,0.22); color:#8fe3d6; font-weight:700; font-size:13px;
+  padding:6px 12px; border-radius:999px; margin-bottom:16px;}
+.hero-title{font-size:40px; margin:0 0 14px; color:#fff;}
+.hero-sub{color:#c7cde2; font-size:16.5px; line-height:1.6; max-width:540px; margin:0 auto 26px;}
+.sample-review{background:var(--panel); border-radius:14px; padding:20px 22px; text-align:left; max-width:460px; margin:0 auto 30px;}
+.sample-review blockquote{margin:0; font-family:'Fraunces',serif; font-size:16.5px; line-height:1.6; color:var(--ink);}
+.sample-review figcaption{margin-top:12px; padding-top:10px; border-top:1px solid var(--line); font-size:13px; color:var(--ink-soft);}
+.sample-review figcaption b{color:var(--pos);}
+.banner{border-radius:12px; padding:14px 18px; margin-bottom:22px; font-size:14.5px; display:flex; align-items:center;
+  justify-content:space-between; gap:14px; max-width:560px; text-align:left;}
+.banner.resume{background:#fff7e6; border:1px solid #f1d9a3; color:#7a5b12;}
+.banner.warn{background:#fdeeee; border:1px solid #f3c3c3; color:#8a2f2f;}
+
+/* ---------- FORMS ---------- */
+.id-card{text-align:left; max-width:460px; width:100%;}
+.id-card h2{margin-top:0;}
+.field{margin:0 0 20px; padding:0; border:none;}
+.field label,.field legend,.field-label{display:block; font-weight:600; font-size:14.5px; margin-bottom:8px; padding:0; color:var(--ink);}
+.field input{width:100%; padding:12px 14px; border-radius:10px; border:1.5px solid var(--line); font-size:15px; font-family:inherit;}
+.hint{color:var(--ink-soft); font-size:12.5px; margin-top:6px; line-height:1.5;}
+.consent{color:var(--ink-soft); font-size:13px; line-height:1.55; background:var(--panel-soft); border-radius:10px; padding:12px 14px; margin:0 0 14px;}
+.form-error{color:var(--neg); font-size:13.5px; font-weight:600; min-height:20px; margin-bottom:8px;}
+textarea{width:100%; min-height:110px; border-radius:12px; border:1.5px solid var(--line); padding:14px; font-family:inherit; font-size:14.5px; resize:vertical;}
+
+/* segmented choices: the 1–5 confidence scale */
+.seg{display:grid; grid-template-columns:repeat(var(--n,2),1fr); gap:8px;}
+.seg-btn{border:2px solid var(--line); background:#fff; border-radius:10px; padding:10px 6px; font-weight:700; font-size:15px; color:var(--ink);}
+.seg-btn:hover:not(:disabled){border-color:var(--ink);}
+.seg-btn.selected{border-color:var(--gold); background:#fffaef; box-shadow:0 0 0 3px rgba(242,184,75,0.3);}
+.seg-btn:disabled{cursor:default;}
+.seg-ends{display:flex; justify-content:space-between; gap:12px; font-size:12.5px; color:var(--ink-soft); margin-top:6px;}
+
+/* ---------- TUTORIAL ---------- */
+.tut-progress{display:flex; gap:6px; justify-content:center; margin-bottom:22px;}
+.tut-dot{width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.25);}
+.tut-dot.done{background:var(--cta);}
+.tut-dot.now{background:var(--gold);}
+.tut-body h2{font-size:25px; margin-top:0;}
+.tut-body p,.tut-body li{color:var(--ink-soft); font-size:15.5px; line-height:1.65;}
+.tut-body ul{padding-left:20px; margin:0;}
+.tut-body li{margin-bottom:8px;}
+.tut-nav{display:flex; justify-content:space-between; margin-top:24px;}
+.def-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;}
+@media(max-width:640px){ .def-grid{grid-template-columns:1fr;} }
+.def-card{border-radius:12px; padding:14px 16px; border:1.5px solid var(--line);}
+.def-emoji{font-size:22px; margin-bottom:4px;}
+.def-name{font-weight:700; font-size:15px; margin-bottom:4px;}
+.def-text{font-size:13.5px; color:var(--ink-soft); line-height:1.5;}
+.example-box{background:var(--panel-soft); border-radius:12px; padding:18px 20px; margin:16px 0; border:1px solid var(--line);}
+.example-box .review-text{font-size:17px;}
+.pill{display:inline-block; margin-top:12px; padding:5px 12px; border-radius:999px; font-size:12.5px; font-weight:700; color:#fff;}
+.pill.positive{background:var(--pos);} .pill.negative{background:var(--neg);}
+
+/* ---------- REVIEW + CHOICES ---------- */
+.on-dark{color:#fff; margin:0 0 6px; font-size:24px;}
+.on-dark-soft{color:#c7cde2; margin:0 0 18px; font-size:15px; line-height:1.55;}
+.review-card{background:var(--panel); border-radius:20px; padding:32px 36px; margin-bottom:16px; box-shadow:0 20px 50px -25px rgba(10,15,40,0.5);}
+.review-text{font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:18px; line-height:1.72; color:var(--ink);
+  white-space:pre-line; overflow-wrap:anywhere; max-width:66ch; margin:0 auto;}
+.choice-panel{background:var(--panel); border-radius:20px; padding:24px 28px; box-shadow:0 20px 50px -25px rgba(10,15,40,0.5);}
+.choice-q{font-weight:700; font-size:15px; margin:0 0 10px; color:var(--ink);}
+.label-row{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;}
+.label-btn{border:2px solid var(--line); background:#fff; border-radius:14px; padding:14px 16px; color:var(--ink);
+  display:grid; grid-template-columns:auto 1fr; column-gap:12px; align-items:center; text-align:left;}
+.label-icon{grid-row:1 / 3; font-size:26px;}
+.label-name{font-weight:700; font-size:16px;}
+.label-hint{font-size:13px; color:var(--ink-soft);}
+.label-btn.positive:hover:not(:disabled){border-color:var(--pos);}
+.label-btn.negative:hover:not(:disabled){border-color:var(--neg);}
+.label-btn.selected{border-color:var(--gold); background:#fffaef; box-shadow:0 0 0 3px rgba(242,184,75,0.3);}
+.label-btn:disabled{cursor:default;}
+.task-footer{display:flex; justify-content:flex-end; margin-top:20px;}
+.feedback-panel{border-radius:12px; padding:14px 18px; margin-top:18px; font-size:14.5px; line-height:1.55;}
+.feedback-panel.correct{background:#e9f9f1; color:#1c6b46; border:1px solid #b7e5cc;}
+.feedback-panel.incorrect{background:#fdeeee; color:#8a2f2f; border:1px solid #f3c3c3;}
+@media(max-width:640px){
+  .review-card{padding:22px 20px;} .review-text{font-size:16.5px;}
+  .choice-panel{padding:20px 18px;} .label-row{grid-template-columns:1fr;}
+}
+#task-topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px;}
+.progress-label{color:#c7cde2; font-size:13.5px; font-weight:600;}
+.progress-track{background:rgba(255,255,255,0.12); border-radius:999px; height:6px; width:180px; overflow:hidden; margin-top:6px;}
+.progress-fill{background:var(--gold); height:100%; border-radius:999px; transition:width .3s ease;}
+
+/* ---------- DONE / SYNC ---------- */
+.sync{border-radius:12px; padding:14px 18px; font-size:14.5px; line-height:1.55; margin:18px auto 0; max-width:520px; text-align:left;}
+.sync.ok{background:#e9f9f1; color:#1c6b46;}
+.sync.wait{background:#fff7e6; color:#7a5b12;}
+.sync.err{background:#fdeeee; color:#8a2f2f;}
+
+/* ---------- ABOUT / DATA ---------- */
+.cite-box{background:var(--panel-soft); border-left:3px solid var(--cta); padding:14px 18px; border-radius:8px; font-size:13.5px; color:var(--ink-soft); margin-top:20px;}
+.data-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;}
+.data-actions.center{justify-content:center;}
+.stat-row{display:flex; gap:16px; margin:18px 0; flex-wrap:wrap;}
+.stat{background:var(--panel-soft); border-radius:12px; padding:14px 18px; min-width:120px;}
+.stat b{display:block; font-size:22px; font-family:'Fraunces',serif;}
+.stat span{font-size:12px; color:var(--ink-soft);}
+.table-scroll{overflow-x:auto;}
+table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:16px;}
+th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
+th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
+.small-note{color:var(--ink-soft); font-size:13px; margin-top:14px;}
+
+@media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
+
+/* ---------- LANDING POPCORN ---------- */
+.popcorn-scatter{position:absolute; inset:0; z-index:1; pointer-events:none;}
+.kernel{position:absolute; left:var(--x); top:var(--y); width:var(--s); height:auto; aspect-ratio:1;
+  transform:rotate(var(--r)); filter:drop-shadow(0 4px 6px rgba(0,0,0,0.35));}
+.kernel.far{filter:none; opacity:.9;}  /* farther away: smaller, no shadow */
+</style>
+</head>
+<body>
+
+<!-- ============ LANDING ============ -->
+<section id="screen-landing" class="screen active">
+  <svg width="0" height="0" style="position:absolute;" aria-hidden="true" focusable="false">
+    <defs><radialGradient id="pc-lobe" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#fdf4dc"/><stop offset="1" stop-color="#efd79c"/></radialGradient><radialGradient id="pc-butter" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#fffbea"/><stop offset=".55" stop-color="#fbe8ae"/><stop offset="1" stop-color="#e9c46c"/></radialGradient><linearGradient id="pc-hull" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d4843a"/><stop offset="1" stop-color="#7f3c0f"/></linearGradient><g id="pc-a"><g transform="translate(30 45) rotate(8)"><path d="M-9 -5 q1 11 10 12 q9 -2 9 -13 q-9 4 -19 1z" fill="url(#pc-hull)" stroke="#6e330c" stroke-width=".7"/><path d="M-5 0 q4 4 9 1" fill="none" stroke="#f0b866" stroke-width="1.1" stroke-linecap="round"/></g><path d="M34.2 32.1 A5.4 5.4 0 0 1 40.4 27.5 A5.2 5.2 0 0 1 48.8 26.2 A5.4 5.4 0 0 1 51.7 33.3 A5.3 5.3 0 0 1 48.5 40.1 A5.6 5.6 0 0 1 39.1 41.6 A3.3 3.3 0 0 1 33.9 38.7 A3.8 3.8 0 0 1 34.2 32.1Z" fill="url(#pc-butter)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M28.3 36.6 A5.9 5.9 0 0 1 22.3 44.6 A9.0 9.0 0 0 1 9.8 39.3 A5.1 5.1 0 0 1 13.4 31.1 A4.9 4.9 0 0 1 20.2 28.3 A7.5 7.5 0 0 1 28.3 36.6Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M48.5 23.8 A8.2 8.2 0 0 1 34.4 27.2 A6.7 6.7 0 0 1 27.1 19.3 A10.4 10.4 0 0 1 39.8 10.6 A7.5 7.5 0 0 1 50.8 15.4 A6.1 6.1 0 0 1 48.5 23.8Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M12.5 16.0 A5.5 5.5 0 0 1 17.9 9.6 A5.5 5.5 0 0 1 26.2 11.6 A6.9 6.9 0 0 1 34.5 18.9 A7.3 7.3 0 0 1 32.9 29.2 A8.4 8.4 0 0 1 20.3 33.7 A6.3 6.3 0 0 1 14.5 25.2 A6.5 6.5 0 0 1 12.5 16.0Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M18.8 30.8 A7.1 7.1 0 0 1 25.0 20.7 A5.7 5.7 0 0 1 34.9 19.5 A7.3 7.3 0 0 1 43.7 27.2 A5.4 5.4 0 0 1 41.8 36.4 A7.1 7.1 0 0 1 35.4 46.6 A10.2 10.2 0 0 1 21.3 39.3 A5.9 5.9 0 0 1 18.8 30.8Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M24.6 9.8 A4.6 4.6 0 0 1 29.6 5.1 A4.4 4.4 0 0 1 36.0 5.4 A3.8 3.8 0 0 1 38.3 11.4 A3.6 3.6 0 0 1 38.2 17.3 A5.0 5.0 0 0 1 30.6 18.6 A4.1 4.1 0 0 1 25.1 15.3 A3.6 3.6 0 0 1 24.6 9.8Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/></g><g id="pc-b"><g transform="translate(40 44) rotate(-20)"><path d="M-9 -5 q1 11 10 12 q9 -2 9 -13 q-9 4 -19 1z" fill="url(#pc-hull)" stroke="#6e330c" stroke-width=".7"/><path d="M-5 0 q4 4 9 1" fill="none" stroke="#f0b866" stroke-width="1.1" stroke-linecap="round"/></g><path d="M28.4 20.9 A7.1 7.1 0 0 1 28.9 31.8 A7.8 7.8 0 0 1 17.0 34.3 A7.7 7.7 0 0 1 6.9 28.6 A10.4 10.4 0 0 1 19.5 17.1 A5.9 5.9 0 0 1 28.4 20.9Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M39.8 35.3 A4.5 4.5 0 0 1 36.9 28.1 A5.5 5.5 0 0 1 40.6 19.0 A5.5 5.5 0 0 1 49.9 20.7 A4.5 4.5 0 0 1 54.9 27.1 A6.9 6.9 0 0 1 47.3 34.3 A4.6 4.6 0 0 1 39.8 35.3Z" fill="url(#pc-butter)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M44.3 42.6 A10.3 10.3 0 0 1 30.4 49.5 A9.0 9.0 0 0 1 23.8 37.5 A5.8 5.8 0 0 1 28.1 29.5 A9.2 9.2 0 0 1 41.2 31.3 A7.7 7.7 0 0 1 44.3 42.6Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M30.8 27.9 A6.3 6.3 0 0 1 21.8 21.8 A7.2 7.2 0 0 1 24.5 9.4 A6.7 6.7 0 0 1 35.4 5.7 A8.0 8.0 0 0 1 44.4 13.7 A5.4 5.4 0 0 1 42.9 23.4 A7.8 7.8 0 0 1 30.8 27.9Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M27.1 34.3 A3.8 3.8 0 0 1 28.6 40.3 A2.6 2.6 0 0 1 26.9 44.2 A3.3 3.3 0 0 1 22.8 46.7 A4.2 4.2 0 0 1 15.9 46.5 A5.6 5.6 0 0 1 12.8 37.7 A5.8 5.8 0 0 1 20.9 33.2 A3.5 3.5 0 0 1 27.1 34.3Z" fill="url(#pc-butter)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/><path d="M19.7 31.6 A5.0 5.0 0 0 1 22.4 24.5 A5.5 5.5 0 0 1 28.4 19.1 A6.6 6.6 0 0 1 36.7 24.8 A5.3 5.3 0 0 1 36.5 33.6 A6.9 6.9 0 0 1 27.4 37.7 A5.9 5.9 0 0 1 19.7 31.6Z" fill="url(#pc-lobe)" stroke="#cfae6d" stroke-width=".9" stroke-linejoin="round"/></g></defs>
+  </svg>
+  <div class="popcorn-scatter" aria-hidden="true">
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:6%; --y:12%; --s:46px; --r:-18deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:16%; --y:30%; --s:28px; --r:40deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:9%; --y:58%; --s:38px; --r:12deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:4%; --y:82%; --s:52px; --r:-30deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:20%; --y:76%; --s:30px; --r:65deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:30%; --y:8%; --s:26px; --r:20deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:63%; --y:6%; --s:36px; --r:-45deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:83%; --y:15%; --s:50px; --r:25deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:92%; --y:40%; --s:28px; --r:-10deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:87%; --y:64%; --s:42px; --r:50deg;"><use href="#pc-a"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:75%; --y:85%; --s:36px; --r:-22deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:93%; --y:88%; --s:26px; --r:15deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel" viewBox="4 0 56 56" style="--x:43%; --y:88%; --s:40px; --r:-60deg;"><use href="#pc-b"/></svg>
+    <svg class="kernel far" viewBox="4 0 56 56" style="--x:56%; --y:77%; --s:24px; --r:30deg;"><use href="#pc-a"/></svg>
+  </div>
+  <div class="landing-inner">
+    <div id="ticket-scene">
+      <div class="ticket-wrap">
+        <button id="ticket" class="ticket" type="button">
+          <span class="ticket-main"><span class="ticket-admit" id="ticket-admit"></span><span class="ticket-title" id="ticket-title"></span></span>
+          <span class="ticket-stub"><span id="ticket-stub"></span></span>
+        </button>
+      </div>
+      <div class="ticket-hint" id="ticket-hint"></div>
+    </div>
+    <div id="letter" class="letter">
+      <div class="letter-title" id="letter-title"></div>
+      <div id="letter-body"></div>
+      <button class="btn btn-primary" id="continue-btn"></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NAV ============ -->
+<nav id="navbar">
+  <div class="brand"><span class="brand-dot"></span> <span id="nav-brand"></span></div>
+  <div class="nav-links" id="nav-links">
+    <button class="nav-btn" data-nav="home"></button>
+    <button class="nav-btn" data-nav="start"></button>
+    <button class="nav-btn" data-nav="about"></button>
+    <button class="nav-btn" data-nav="feedback"></button>
+    <button class="nav-btn" data-nav="data" id="nav-data" hidden></button>
+  </div>
+</nav>
+
+<!-- ============ HOME ============ -->
+<section id="screen-home" class="screen">
+  <div class="center-wrap">
+    <div id="home-banners"></div>
+    <span class="tag" id="home-tag"></span>
+    <h1 class="hero-title" id="home-title"></h1>
+    <p class="hero-sub" id="home-subtitle"></p>
+    <figure class="sample-review">
+      <blockquote id="home-sample-text"></blockquote>
+      <figcaption id="home-sample-caption"></figcaption>
+    </figure>
+    <button class="btn btn-primary" id="home-start-btn"></button>
+  </div>
+</section>
+
+<!-- ============ PARTICIPANT INFO ============ -->
+<section id="screen-id" class="screen">
+  <div class="center-wrap">
+    <div class="card id-card">
+      <h2 id="id-heading"></h2>
+      <div class="field">
+        <label for="participant-input" id="id-name-label"></label>
+        <input id="participant-input" type="text" maxlength="60" autocomplete="username" autocapitalize="none" spellcheck="false">
+        <div class="hint" id="id-name-hint"></div>
+      </div>
+      <p class="consent" id="id-consent"></p>
+      <div class="form-error" id="id-error" role="alert"></div>
+      <button class="btn btn-primary btn-block" id="id-continue-btn"></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TUTORIAL ============ -->
+<section id="screen-tutorial" class="screen">
+  <div class="page-wrap">
+    <div class="tut-progress" id="tut-progress"></div>
+    <div class="card tut-body" id="tut-body"></div>
+    <div class="tut-nav">
+      <button class="btn btn-dark" id="tut-back-btn"></button>
+      <button class="btn btn-primary" id="tut-next-btn"></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRACTICE ============ -->
+<section id="screen-practice" class="screen">
+  <div class="page-wrap">
+    <h2 class="on-dark" id="practice-heading"></h2>
+    <p class="on-dark-soft" id="practice-instructions"></p>
+    <article class="review-card"><div class="review-text" id="practice-text"></div></article>
+    <div class="choice-panel">
+      <p class="choice-q" id="practice-q"></p>
+      <div class="label-row" id="practice-labels" role="group" aria-labelledby="practice-q"></div>
+      <p class="choice-q" id="practice-conf-q"></p>
+      <div id="practice-confidence" role="group" aria-labelledby="practice-conf-q"></div>
+      <div id="practice-feedback" role="status"></div>
+      <div class="task-footer"><button class="btn btn-primary" id="practice-btn" disabled></button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TASK ============ -->
+<section id="screen-task" class="screen">
+  <div class="page-wrap">
+    <div id="task-topbar">
+      <div>
+        <div class="progress-label" id="task-progress-label"></div>
+        <div class="progress-track"><div class="progress-fill" id="task-progress-fill" style="width:0%;"></div></div>
+      </div>
+      <button class="btn btn-dark btn-small" id="exit-btn"></button>
+    </div>
+    <article class="review-card"><div class="review-text" id="task-text"></div></article>
+    <div class="choice-panel">
+      <p class="choice-q" id="task-q"></p>
+      <div class="label-row" id="task-labels" role="group" aria-labelledby="task-q"></div>
+      <p class="choice-q" id="task-conf-q"></p>
+      <div id="task-confidence" role="group" aria-labelledby="task-conf-q"></div>
+      <div class="task-footer"><button class="btn btn-primary" id="task-next-btn" disabled></button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DONE ============ -->
+<section id="screen-done" class="screen">
+  <div class="page-wrap">
+    <div class="content-card center">
+      <h2 id="done-heading"></h2>
+      <p id="done-body"></p>
+      <div id="done-sync" class="sync" role="status"></div>
+      <div class="data-actions center">
+        <button class="btn btn-outline btn-small" id="done-retry-btn" hidden></button>
+        <button class="btn btn-outline btn-small" id="done-download-btn" hidden></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TERMINATED (failed attention checks) ============ -->
+<section id="screen-terminated" class="screen">
+  <div class="page-wrap">
+    <div class="content-card center">
+      <h2 id="term-heading"></h2>
+      <p id="term-body"></p>
+      <button class="btn btn-primary" id="term-restart-btn"></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABOUT ============ -->
+<section id="screen-about" class="screen">
+  <div class="page-wrap">
+    <div class="content-card">
+      <h2 id="about-heading"></h2>
+      <p id="about-intro"></p>
+      <h3 id="about-record-heading"></h3>
+      <p id="about-record-body"></p>
+      <h3 id="about-source-heading"></h3>
+      <p id="about-source-body"></p>
+      <div class="cite-box" id="about-citation"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEEDBACK ============ -->
+<section id="screen-feedback" class="screen">
+  <div class="page-wrap">
+    <div class="content-card">
+      <h2 id="feedback-heading"></h2>
+      <p id="feedback-prompt"></p>
+      <textarea id="feedback-text"></textarea>
+      <div style="margin-top:14px;"><button class="btn btn-primary" id="feedback-submit-btn"></button></div>
+      <div id="feedback-confirm" class="small-note" role="status"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATA (researcher view: add ?researcher to the URL) ============ -->
+<section id="screen-data" class="screen">
+  <div class="page-wrap">
+    <div class="content-card">
+      <h2 id="data-heading"></h2>
+      <p style="margin-bottom:0;" id="data-intro"></p>
+      <div class="stat-row" id="data-stats"></div>
+      <p class="small-note" id="data-backend"></p>
+      <div class="data-actions">
+        <button class="btn btn-outline btn-small" id="export-csv-btn"></button>
+        <button class="btn btn-outline btn-small" id="export-json-btn"></button>
+        <button class="btn btn-outline btn-small" id="data-retry-btn"></button>
+        <button class="btn btn-danger btn-small" id="clear-data-btn"></button>
+      </div>
+      <div class="table-scroll">
+        <table id="data-table"><thead><tr id="data-head"></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* =====================================================================
+   STUDY SETTINGS — the only block you need to change between deployments.
+   The AI-assisted version will reuse this file with CONDITION changed.
+===================================================================== */
+const CONFIG = {
+  // Which arm of the study this page is. Every saved record carries it.
+  CONDITION: "no_ai",
+  STUDY_VERSION: "a3-no-ai-v2",
+  // Real reviews per participant. The two attention checks are added on top.
+  N_TRIALS: 5,
+  // The study dataset (built from the A2 CSV by make_reviews_json.py).
+  DATA_URL: "reviews.json",
+  // Your Google Apps Script web-app URL (ends in /exec). See README.
+  // While this is empty, responses are only saved in the participant's browser.
+  ENDPOINT: "",
+  // Shown to participants if their responses can't be uploaded.
+  CONTACT_EMAIL: "jugeller@umich.edu",
+};
+// Add ?researcher to the URL to see the Data tab.
+const IS_RESEARCHER = new URLSearchParams(location.search).has("researcher");
+
+/* =====================================================================
+   EDITABLE TEXT — every word displayed in the app lives here.
+   {placeholder} tokens get filled in by the code; keep the braces.
+===================================================================== */
+var COPY = {
+  pageTitle: "The Movie Review Project",
+
+  nav: { brand: "The Movie Review Project", home: "Home", start: "Start study", about: "About", feedback: "Give feedback", data: "Data" },
+
+  landing: {
+    ticketHint: "Click the ticket to begin!",
+    ticketAdmit: "Admit one",
+    ticketTitle: "The Movie Review Project",
+    ticketStub: "Row C<br>Seat 7",
+    letterTitle: "Thanks for coming",
+    letterParagraphs: [
+      "You’ll read a few movie reviews written by IMDb users and decide whether each reviewer liked the movie.",
+      "It takes about 10 minutes, including a short tutorial and two practice reviews.",
+    ],
+    continueBtn: "Get started",
+  },
+
+  home: {
+    tag: "About 10 minutes",
+    title: "Did they like the movie?",
+    subtitle: "Read {n} IMDb user reviews and decide whether each reviewer liked the movie. Your answers are part of a class study on how people judge reviews.",
+    sampleText: "I walked in expecting another lazy sequel and walked out grinning. It’s not perfect, but it’s the most fun I’ve had at the movies all year.",
+    sampleCaption: "<b>Positive.</b> Despite one small complaint, the reviewer clearly liked it.",
+    startBtn: "Start study",
+    resumeTemplate: "You have a session in progress as <b>{name}</b>.",
+    resumeBtn: "Resume",
+    noBackendWarning: "<span><b>Setup needed:</b> no backend URL is set, so responses are only saved in this browser. Add your Apps Script URL to <code>CONFIG.ENDPOINT</code> before sharing the link.</span>",
+  },
+
+  idScreen: {
+    heading: "Before you start",
+    nameLabel: "Your uniqname",
+    namePlaceholder: "e.g. janedoe",
+    nameHint: "The part of your UMich email before @umich.edu.",
+    consent: "We’ll record your uniqname, your answers, your confidence ratings, and how long each review takes. Answers are used only for this class project.",
+    continueBtn: "Continue",
+    nameRequired: "Enter your uniqname to continue.",
+  },
+
+  tutorial: {
+    backBtn: "Back",
+    nextBtn: "Next",
+    lastStepBtn: "Start practice",
+    steps: [
+      { heading: "What you’ll do", paragraphs: [
+        "You’ll read <b>{n} movie reviews</b> written by IMDb users, one at a time.",
+        "For each one, decide whether the reviewer <b>liked</b> the movie (<b>Positive</b>) or <b>didn’t like</b> it (<b>Negative</b>). Then rate how sure you are.",
+      ]},
+      { heading: "What to judge",
+        intro: "Judge the <b>reviewer’s own feelings about the movie</b> after watching it, not the characters’ feelings or the mood of the story. Your options are:",
+        cards: [
+          { emoji: "👍", title: "Positive", text: "Overall, the reviewer liked the movie. They enjoyed it, admired it, or would recommend it." },
+          { emoji: "👎", title: "Negative", text: "Overall, the reviewer didn’t like the movie. They were disappointed, bored, or wouldn’t recommend it." },
+        ],
+      },
+      { heading: "What can be misleading",
+        intro: "Some reviews make this tricky. Don’t be thrown by:",
+        cards: [
+          { emoji: "🌧️", title: "Sad or dark stories", text: "A heartbreaking ending can be part of a movie the reviewer loved." },
+          { emoji: "🎭", title: "Opinions about characters", text: "Disliking a character isn’t the same as disliking the movie." },
+          { emoji: "📝", title: "A few complaints", text: "Most reviewers mention some flaws. Weigh them against their overall verdict." },
+          { emoji: "🎞️", title: "Plot summaries", text: "Skip past the retelling and look for the reviewer’s own opinion." },
+        ],
+      },
+      { heading: "An example",
+        intro: "Here’s a review that’s easy to get wrong:",
+        exampleText: "Wow, what a movie. That Jennifer character was a mess. She made terrible decisions and the ending was heartbreaking. I haven’t stopped thinking about it since.",
+        exampleLabel: 1,
+        outro: "The negative words describe a character and a sad ending, not the movie. “Wow, what a movie” and “I haven’t stopped thinking about it” show the reviewer loved it.",
+      },
+      { heading: "Confidence and attention checks",
+        intro: "Two more things you’ll see during the study:",
+        cards: [
+          { emoji: "🎯", title: "Rate your confidence", text: "After choosing Positive or Negative, rate how sure you are from 1 (guessing) to 5 (certain). There’s no right answer; just be honest." },
+          { emoji: "👀", title: "Attention checks", text: "A couple of items aren’t real reviews. They tell you exactly what to choose, so just follow their instructions." },
+        ],
+      },
+      { heading: "Before you start", bullets: [
+        "Reviews may contain spoilers.",
+        "Next you’ll do <b>2 practice reviews</b>. They don’t count.",
+      ]},
+    ],
+  },
+
+  practice: {
+    heading: "Practice {n} of {total}",
+    instructions: "This one doesn’t count. Answer as you would in the study, then check your answer.",
+    checkBtn: "Check answer",
+    nextBtn: "Next practice review",
+    startBtn: "Start the study",
+    correctPrefix: "✅ <b>Right.</b> ",
+    incorrectPrefix: "❌ <b>Not quite.</b> ",
+    answerTemplate: "This review is <b>{label}</b>.",
+  },
+
+  task: {
+    progressTemplate: "{n} of {total}",
+    question: "Did the reviewer like the movie?",
+    confidenceQuestion: "How sure are you?",
+    confLow: "1 = guessing",
+    confHigh: "5 = certain",
+    nextBtn: "Next review",
+    lastBtn: "Finish reviews",
+    exitBtn: "Exit study",
+    exitConfirm: "Leave the study? Answers you’ve already submitted are saved, but you won’t be able to finish this session.",
+  },
+
+  labels: {
+    1: { name: "Positive", hint: "Liked the movie" },
+    0: { name: "Negative", hint: "Didn’t like the movie" },
+  },
+
+  done: {
+    heading: "You’re done. Thank you!",
+    body: "Thanks for taking part in this study.",
+    sync: {
+      ok: "✓ Your responses are saved.",
+      wait: "Saving your responses… please keep this tab open for a moment.",
+      err: "Your responses haven’t reached the server yet. We’ll keep retrying. Please keep this tab open, or download them and email the file to {email}.",
+      local: "No server is set up, so your responses are saved in this browser only.",
+    },
+    retryBtn: "Try saving again",
+    downloadBtn: "Download my responses",
+  },
+
+  terminated: {
+    heading: "This session ended early",
+    body: "Both attention checks were missed, so we can’t use this session’s answers. You’re welcome to start over. Please read each item carefully.",
+    restartBtn: "Start over",
+  },
+
+  about: {
+    heading: "About this study",
+    intro: "This study is part of a Human-AI Interaction class project at the University of Michigan. It looks at how accurately, confidently, and quickly people can tell whether a movie review is positive or negative.",
+    recordHeading: "What we record",
+    recordBody: "Your uniqname, each answer and confidence rating, and how long each review took. Nothing else is collected, and the data is used only for this class project.",
+    sourceHeading: "Where the reviews come from",
+    sourceBody: "The reviews come from the <strong>Large Movie Review Dataset</strong> (Maas et al., 2011): 50,000 IMDb user reviews, each labeled positive or negative from the reviewer’s star rating. This study uses 200 reviews randomly sampled from its training split. The original labels are never shown to you; they’re used afterwards to score answers.",
+    citation: "Maas, A. L., Daly, R. E., Pham, P. T., Huang, D., Ng, A. Y., &amp; Potts, C. (2011). Learning Word Vectors for Sentiment Analysis. <em>Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics (ACL 2011)</em>, 142–150.",
+  },
+
+  feedback: {
+    heading: "Give feedback",
+    prompt: "Something confusing or broken? Let us know.",
+    placeholder: "Type your feedback here…",
+    submitBtn: "Send feedback",
+    confirmMsg: "Thanks, your feedback was sent.",
+  },
+
+  data: {
+    heading: "Collected data (this browser)",
+    intro: "Records submitted from this browser. The full data from every participant is in the Google Sheet behind the backend.",
+    statLabels: ["review answers", "completed sessions", "waiting to upload"],
+    backendOn: "Backend: sending records to your Apps Script endpoint.",
+    backendOff: "Backend: not set. Add your Apps Script URL to CONFIG.ENDPOINT.",
+    csvBtn: "Download CSV",
+    jsonBtn: "Download JSON",
+    retryBtn: "Retry upload",
+    clearBtn: "Clear this browser’s data",
+    clearConfirm: "Delete every record stored in this browser? Records already uploaded to the Google Sheet are not affected.",
+    tableHeaders: ["Participant", "Item", "Gold", "Answer", "Conf.", "Seconds", "Submitted"],
+    reviewItem: "Review #{id}",
+    checkItem: "Check {id}",
+  },
+
+  loadError: {
+    heading: "Couldn’t load the reviews",
+    body: "This page needs <code>{file}</code> in the same folder, served over http(s). Opening the file directly (file://) blocks that. Error: {error}",
+  },
+};
+
+/* =====================================================================
+   STUDY CONTENT — practice items, tutorial example, attention checks.
+   Labels: 1 = positive, 0 = negative (same as the IMDB dataset).
+===================================================================== */
+const PRACTICE = [
+  { id: "P1", label: 1,
+    text: "The pacing drags in the middle, and the villain is pretty one-note. Still, the last half hour had me on the edge of my seat, and I’ve already told three friends to go see it.",
+    explain: "It lists two complaints, but the overall verdict is clear: the ending gripped them and they’re recommending it to friends." },
+  { id: "P2", label: 0,
+    text: "Gorgeous cinematography and a fantastic score, I’ll give it that. But I checked my watch every ten minutes and left feeling like I’d wasted my evening.",
+    explain: "Praise for the visuals and music doesn’t outweigh how the reviewer felt overall: bored, and like the movie wasted their time." },
+];
+// Instructed-response checks. Each participant gets both, at random points
+// (one in each half of the session). Missing one is recorded; missing both
+// ends the session, which the participant can then restart.
+const ATTENTION_CHECKS = [
+  { id: "AC1", label: 0, text: "This is an attention check, not a movie review. To show you’re reading carefully, choose Negative, then any confidence level." },
+  { id: "AC2", label: 1, text: "Quick attention check: this isn’t a real review. Please choose Positive, then any confidence level." },
+];
+const AC_BY_ID = Object.fromEntries(ATTENTION_CHECKS.map(a => [a.id, a]));
+const LABEL_META = { 1: { key: "positive", emoji: "👍" }, 0: { key: "negative", emoji: "👎" } };
+const LABEL_ORDER = [1, 0];
+
+function fmt(template, vars){
+  return template.replace(/\{(\w+)\}/g, (m, key) => (key in vars ? vars[key] : m));
+}
+function labelName(v){ return COPY.labels[v].name; }
+
+/* ======================= DATA LOADING ======================= */
+var REVIEWS = [];
+var REVIEW_BY_ID = new Map();
+function cleanText(t){
+  return String(t).replace(/<br\s*\/?>/gi, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+function wordCount(t){ return t.split(/\s+/).filter(Boolean).length; }
+async function loadReviews(){
+  const res = await fetch(CONFIG.DATA_URL, { cache: "no-store" });
+  if(!res.ok) throw new Error("HTTP " + res.status + " loading " + CONFIG.DATA_URL);
+  const data = await res.json();
+  if(!Array.isArray(data) || data.length < CONFIG.N_TRIALS){
+    throw new Error(CONFIG.DATA_URL + " must be an array with at least " + CONFIG.N_TRIALS + " reviews");
+  }
+  data.forEach((r, i) => {
+    const okId = r && (typeof r.id === "number" || typeof r.id === "string");
+    if(!okId || typeof r.text !== "string" || (r.label !== 0 && r.label !== 1)){
+      throw new Error("Entry " + i + " needs an id, text, and label (0 or 1)");
+    }
+  });
+  REVIEWS = data.map(r => Object.assign({}, r, { id: String(r.id), text: cleanText(r.text) }));
+  REVIEW_BY_ID = new Map(REVIEWS.map(r => [r.id, r]));
+}
+
+/* ======================= STORAGE ======================= */
+// localStorage is a local mirror + upload queue; the Google Sheet is the
+// real record. Keys are namespaced by condition, except the list of reviews
+// this browser has already been shown, which both study versions share
+// (when hosted on the same github.io domain): anyone who happens to do both
+// versions in the same browser won't get the same review twice.
+const NS = "reviewStudy_" + CONFIG.CONDITION + "_";
+const SHARED_NS = "reviewStudy_shared_";
+const memoryFallback = {};
+function lsGet(key, fallback, shared){
+  const k = (shared ? SHARED_NS : NS) + key;
+  if(Object.prototype.hasOwnProperty.call(memoryFallback, k)) return memoryFallback[k];
+  try{ const v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function lsSet(key, val, shared){
+  const k = (shared ? SHARED_NS : NS) + key;
+  memoryFallback[k] = val;
+  try{ localStorage.setItem(k, JSON.stringify(val)); }catch(e){}
+}
+function getDB(){ return lsGet("db", []); }
+function saveDB(db){ lsSet("db", db); }
+function getPending(){ return lsGet("pending", []); }
+function setPending(q){ lsSet("pending", q); }
+
+/* ======================= UPLOAD QUEUE ======================= */
+let flushing = false;
+let lastSyncFailed = false;
+function queueRecord(rec){
+  const db = getDB(); db.push(rec); saveDB(db);
+  const q = getPending(); q.push(rec); setPending(q);
+  flushQueue();
+}
+async function flushQueue(){
+  if(!CONFIG.ENDPOINT || flushing){ updateSyncStatus(); return; }
+  const batch = getPending().slice();
+  if(batch.length === 0){ lastSyncFailed = false; updateSyncStatus(); return; }
+  flushing = true; updateSyncStatus();
+  let ok = false;
+  try{
+    // text/plain keeps this a "simple" request, so Apps Script needs no CORS preflight.
+    const res = await fetch(CONFIG.ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ records: batch }),
+    });
+    const out = await res.json();
+    if(!out.ok) throw new Error(out.error || "backend rejected the records");
+    const sent = new Set(batch.map(r => r.recordId));
+    setPending(getPending().filter(r => !sent.has(r.recordId)));
+    ok = true;
+  }catch(e){
+    console.warn("Upload failed, will retry:", e);
+  }finally{
+    flushing = false;
+    lastSyncFailed = !ok;
+    updateSyncStatus();
+  }
+  if(ok && getPending().length) flushQueue();
+}
+function syncState(){
+  if(!CONFIG.ENDPOINT) return "local";
+  if(getPending().length === 0) return "ok";
+  return lastSyncFailed ? "err" : "wait";
+}
+function updateSyncStatus(){
+  const st = syncState();
+  const el = document.getElementById("done-sync");
+  el.className = "sync " + ({ ok: "ok", wait: "wait", err: "err", local: "wait" }[st]);
+  el.innerHTML = fmt(COPY.done.sync[st], { email: CONFIG.CONTACT_EMAIL });
+  document.getElementById("done-retry-btn").hidden = st !== "err";
+  document.getElementById("done-download-btn").hidden = !(st === "err" || st === "local");
+  if(document.getElementById("screen-data").classList.contains("active")) renderDataStats();
+}
+window.addEventListener("online", flushQueue);
+window.addEventListener("beforeunload", (e) => {
+  if(CONFIG.ENDPOINT && getPending().length){ e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ======================= APP STATE ======================= */
+let state = {
+  session: lsGet("session", null),
+  tutStep: 0,
+  practiceIdx: 0,
+  practiceChecked: false,
+  practiceSel: null,
+  taskSel: null,
+  trial: null,         // timing info for the review on screen
+};
+let resumedAfterReload = false; // flags the trial a participant returns to after reloading mid-task
+function saveSession(){ lsSet("session", state.session); }
+
+/* ======================= NAV / SCREENS ======================= */
+// No nav links during the timed part, so participants can't wander off mid-review.
+const LOCKED_SCREENS = new Set(["screen-task"]);
+function show(id){
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  document.getElementById("navbar").classList.toggle("show", id !== "screen-landing");
+  document.getElementById("nav-links").hidden = LOCKED_SCREENS.has(id);
+  const map = { "screen-home": "home", "screen-id": "start", "screen-tutorial": "start", "screen-practice": "start",
+                "screen-about": "about", "screen-feedback": "feedback", "screen-data": "data" };
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.nav === map[id]));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const t = btn.dataset.nav;
+    if(t === "home") renderHome();
+    else if(t === "start") startOrResume();
+    else if(t === "about") show("screen-about");
+    else if(t === "feedback") show("screen-feedback");
+    else if(t === "data") renderDataView();
+  });
+});
+
+/* ======================= LANDING ======================= */
+document.getElementById("ticket").addEventListener("click", () => {
+  document.getElementById("ticket").classList.add("torn");
+  document.getElementById("ticket-hint").style.visibility = "hidden";
+  setTimeout(() => {
+    const scene = document.getElementById("ticket-scene");
+    scene.classList.add("fading");
+    setTimeout(() => {
+      scene.classList.add("gone");
+      document.getElementById("letter").classList.add("show");
+      document.getElementById("continue-btn").focus();
+    }, 400);
+  }, 550);
+});
+document.getElementById("continue-btn").addEventListener("click", () => startOrResume());
+
+/* ======================= HOME ======================= */
+function renderHome(){
+  const slot = document.getElementById("home-banners");
+  slot.innerHTML = "";
+  if(!CONFIG.ENDPOINT){
+    const warn = document.createElement("div");
+    warn.className = "banner warn";
+    warn.innerHTML = COPY.home.noBackendWarning;
+    slot.appendChild(warn);
+  }
+  const s = state.session;
+  if(s && s.status === "in_progress"){
+    const banner = document.createElement("div");
+    banner.className = "banner resume";
+    banner.innerHTML = `<span>${fmt(COPY.home.resumeTemplate, { name: escapeHtml(s.participant) })}</span>`;
+    const btn = document.createElement("button");
+    btn.className = "btn btn-primary btn-small";
+    btn.textContent = COPY.home.resumeBtn;
+    btn.addEventListener("click", resumeSession);
+    banner.appendChild(btn);
+    slot.appendChild(banner);
+  }
+  show("screen-home");
+}
+document.getElementById("home-start-btn").addEventListener("click", () => startOrResume());
+
+function startOrResume(){
+  if(state.session && state.session.status === "in_progress"){ resumeSession(); return; }
+  renderIdScreen();
+}
+function resumeSession(){
+  const stage = state.session.stage;
+  if(stage === "practice") startPractice();
+  else if(stage === "task") renderTask();
+  else if(stage === "survey") finishSession(); // sessions saved by the earlier version that had a survey
+  else { state.tutStep = 0; renderTutorialStep(); show("screen-tutorial"); }
+}
+
+/* ======================= PARTICIPANT INFO ======================= */
+function renderIdScreen(){
+  const input = document.getElementById("participant-input");
+  input.value = "";   // never carry over a previous participant's uniqname
+  document.getElementById("id-error").textContent = "";
+  show("screen-id");
+  input.focus();
+}
+document.getElementById("id-continue-btn").addEventListener("click", () => {
+  // Normalize so "JaneDoe" and "janedoe@umich.edu" both become "janedoe".
+  const name = document.getElementById("participant-input").value.trim().toLowerCase().replace(/@umich\.edu$/, "").slice(0, 60);
+  const err = document.getElementById("id-error");
+  if(!name){ err.textContent = COPY.idScreen.nameRequired; return; }
+  state.session = {
+    sessionId: uid(),
+    participant: name,
+    status: "in_progress",
+    stage: "tutorial",
+    items: buildAssignment(),
+    progress: 0,
+    attentionFails: 0,
+    practiceFirstTryCorrect: 0,
+    startedAt: Date.now(),
+    taskStartedAt: null,
+    taskEndedAt: null,
+  };
+  saveSession();
+  state.tutStep = 0;
+  renderTutorialStep();
+  show("screen-tutorial");
+});
+
+// Random N reviews (preferring ones this browser hasn't been shown), plus the
+// two attention checks: one in each half, never as the very first item.
+function buildAssignment(){
+  const N = CONFIG.N_TRIALS;
+  const seen = new Set(lsGet("seenReviewIds", [], true));
+  let pool = REVIEWS.filter(r => !seen.has(r.id));
+  if(pool.length < N) pool = REVIEWS.slice();
+  const picks = shuffle(pool).slice(0, N);
+  lsSet("seenReviewIds", Array.from(new Set([...seen, ...picks.map(r => r.id)])), true);
+
+  const half = Math.ceil(N / 2);
+  const checks = shuffle(ATTENTION_CHECKS);
+  const p1 = 1 + Math.floor(Math.random() * half);              // before review p1 (1..half)
+  const p2 = half + 1 + Math.floor(Math.random() * (N - half)); // before review p2 (half+1..N)
+  const items = [];
+  picks.forEach((r, i) => {
+    if(i === p1) items.push({ type: "check", id: checks[0].id });
+    if(i === p2) items.push({ type: "check", id: checks[1].id });
+    items.push({ type: "review", id: r.id });
+  });
+  if(p2 === N) items.push({ type: "check", id: checks[1].id });
+  if(p1 === N) items.push({ type: "check", id: checks[0].id }); // only possible when N = 1
+  return items;
+}
+
+/* ======================= TUTORIAL ======================= */
+const TUT_STEPS = [
+  () => {
+    const s = COPY.tutorial.steps[0];
+    return `<h2>${s.heading}</h2>${s.paragraphs.map(p => `<p>${fmt(p, { n: CONFIG.N_TRIALS })}</p>`).join("")}`;
+  },
+  () => cardStep(COPY.tutorial.steps[1]),
+  () => cardStep(COPY.tutorial.steps[2]),
+  () => {
+    const s = COPY.tutorial.steps[3];
+    const m = LABEL_META[s.exampleLabel];
+    return `<h2>${s.heading}</h2><p>${s.intro}</p>
+      <div class="example-box">
+        <div class="review-text">${s.exampleText}</div>
+        <span class="pill ${m.key}">${m.emoji} ${labelName(s.exampleLabel)}</span>
+      </div>
+      <p>${s.outro}</p>`;
+  },
+  () => cardStep(COPY.tutorial.steps[4]),
+  () => {
+    const s = COPY.tutorial.steps[5];
+    return `<h2>${s.heading}</h2><ul>${s.bullets.map(b => `<li>${b}</li>`).join("")}</ul>`;
+  },
+];
+function cardStep(s){
+  return `<h2>${s.heading}</h2><p>${s.intro}</p>
+    <div class="def-grid">${s.cards.map(c => `<div class="def-card"><div class="def-emoji" aria-hidden="true">${c.emoji}</div><div class="def-name">${c.title}</div><div class="def-text">${c.text}</div></div>`).join("")}</div>`;
+}
+function renderTutorialStep(){
+  document.getElementById("tut-body").innerHTML = TUT_STEPS[state.tutStep]();
+  document.getElementById("tut-progress").innerHTML = TUT_STEPS.map((_, i) =>
+    `<div class="tut-dot ${i < state.tutStep ? "done" : (i === state.tutStep ? "now" : "")}"></div>`).join("");
+  document.getElementById("tut-back-btn").disabled = state.tutStep === 0;
+  document.getElementById("tut-next-btn").textContent =
+    state.tutStep === TUT_STEPS.length - 1 ? COPY.tutorial.lastStepBtn : COPY.tutorial.nextBtn;
+}
+document.getElementById("tut-back-btn").addEventListener("click", () => {
+  if(state.tutStep > 0){ state.tutStep--; renderTutorialStep(); }
+});
+document.getElementById("tut-next-btn").addEventListener("click", () => {
+  if(state.tutStep < TUT_STEPS.length - 1){ state.tutStep++; renderTutorialStep(); window.scrollTo(0, 0); }
+  else startPractice();
+});
+
+/* ======================= SHARED CHOICE CONTROLS ======================= */
+// Builds the Positive/Negative buttons and the 1–5 confidence scale into
+// #<prefix>-labels and #<prefix>-confidence. onChange(field, value, previous).
+function buildChoice(prefix, onChange){
+  const sel = { label: null, confidence: null };
+  const labelsWrap = document.getElementById(prefix + "-labels");
+  labelsWrap.innerHTML = "";
+  LABEL_ORDER.forEach(v => {
+    const m = LABEL_META[v], c = COPY.labels[v];
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "label-btn " + m.key; b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<span class="label-icon" aria-hidden="true">${m.emoji}</span><span class="label-name">${c.name}</span><span class="label-hint">${c.hint}</span>`;
+    b.addEventListener("click", () => {
+      const prev = sel.label; sel.label = v;
+      markSelected(labelsWrap, b);
+      onChange("label", v, prev, sel);
+    });
+    labelsWrap.appendChild(b);
+  });
+  const confWrap = document.getElementById(prefix + "-confidence");
+  confWrap.innerHTML = "";
+  const scale = buildScale(5, (v) => { const prev = sel.confidence; sel.confidence = v; onChange("confidence", v, prev, sel); });
+  confWrap.appendChild(scale);
+  confWrap.insertAdjacentHTML("beforeend", `<div class="seg-ends" aria-hidden="true"><span>${COPY.task.confLow}</span><span>${COPY.task.confHigh}</span></div>`);
+  return sel;
+}
+function buildScale(n, onPick){
+  const wrap = document.createElement("div");
+  wrap.className = "seg"; wrap.style.setProperty("--n", n);
+  for(let v = 1; v <= n; v++){
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "seg-btn"; b.textContent = v; b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => { markSelected(wrap, b); onPick(v); });
+    wrap.appendChild(b);
+  }
+  return wrap;
+}
+function markSelected(container, btn){
+  container.querySelectorAll("button").forEach(x => { const on = x === btn; x.classList.toggle("selected", on); x.setAttribute("aria-pressed", on); });
+}
+function lockChoice(prefix){
+  ["-labels", "-confidence"].forEach(s => document.querySelectorAll("#" + prefix + s + " button").forEach(b => b.disabled = true));
+}
+
+/* ======================= PRACTICE ======================= */
+function startPractice(){
+  state.session.stage = "practice";
+  state.session.practiceFirstTryCorrect = 0;
+  saveSession();
+  state.practiceIdx = 0;
+  renderPractice();
+}
+function renderPractice(){
+  const p = PRACTICE[state.practiceIdx];
+  document.getElementById("practice-heading").textContent = fmt(COPY.practice.heading, { n: state.practiceIdx + 1, total: PRACTICE.length });
+  document.getElementById("practice-text").textContent = p.text;
+  document.getElementById("practice-feedback").innerHTML = "";
+  const btn = document.getElementById("practice-btn");
+  btn.textContent = COPY.practice.checkBtn;
+  btn.disabled = true;
+  state.practiceChecked = false;
+  state.practiceSel = buildChoice("practice", (f, v, prev, sel) => { btn.disabled = sel.label === null || sel.confidence === null; });
+  show("screen-practice");
+}
+document.getElementById("practice-btn").addEventListener("click", () => {
+  const btn = document.getElementById("practice-btn");
+  if(!state.practiceChecked){
+    const sel = state.practiceSel;
+    if(sel.label === null || sel.confidence === null) return;
+    const p = PRACTICE[state.practiceIdx];
+    const ok = sel.label === p.label;
+    if(ok){ state.session.practiceFirstTryCorrect++; saveSession(); }
+    const fb = document.getElementById("practice-feedback");
+    fb.innerHTML = `<div class="feedback-panel ${ok ? "correct" : "incorrect"}">${ok ? COPY.practice.correctPrefix : COPY.practice.incorrectPrefix}${fmt(COPY.practice.answerTemplate, { label: labelName(p.label) })} ${p.explain}</div>`;
+    lockChoice("practice");
+    state.practiceChecked = true;
+    btn.textContent = state.practiceIdx < PRACTICE.length - 1 ? COPY.practice.nextBtn : COPY.practice.startBtn;
+    fb.scrollIntoView({ block: "nearest" });
+  } else if(state.practiceIdx < PRACTICE.length - 1){
+    state.practiceIdx++;
+    renderPractice();
+  } else {
+    startTask();
+  }
+});
+
+/* ======================= TASK ======================= */
+function startTask(){
+  const s = state.session;
+  s.stage = "task";
+  s.taskStartedAt = Date.now();
+  saveSession();
+  queueRecord(sessionRecord("started"));
+  renderTask();
+}
+function itemContent(item){
+  if(item.type === "check"){ const a = AC_BY_ID[item.id]; return a ? { text: a.text, gold: a.label, review: null } : null; }
+  const r = REVIEW_BY_ID.get(item.id);
+  return r ? { text: r.text, gold: r.label, review: r } : null;
+}
+function renderTask(){
+  const s = state.session;
+  if(!s || s.status !== "in_progress"){ renderHome(); return; }
+  if(s.progress >= s.items.length){ finishSession(); return; }
+  const item = s.items[s.progress];
+  const content = itemContent(item);
+  if(!content){
+    // The dataset changed under a saved session; skip the missing item.
+    console.warn("Skipping item not found in dataset:", item);
+    s.progress++; saveSession(); renderTask(); return;
+  }
+  const total = s.items.length;
+  document.getElementById("task-text").textContent = content.text;
+  document.getElementById("task-progress-label").textContent = fmt(COPY.task.progressTemplate, { n: s.progress + 1, total });
+  document.getElementById("task-progress-fill").style.width = (s.progress / total * 100) + "%";
+  const next = document.getElementById("task-next-btn");
+  next.textContent = s.progress === total - 1 ? COPY.task.lastBtn : COPY.task.nextBtn;
+  next.disabled = true;
+
+  const now = performance.now();
+  state.trial = {
+    item, content,
+    shownAt: now, shownAtIso: new Date().toISOString(),
+    firstLabelMs: null, labelChanges: 0,
+    hiddenMs: 0, hiddenSince: document.hidden ? now : null,
+    afterReload: resumedAfterReload,
+  };
+  resumedAfterReload = false;
+  state.taskSel = buildChoice("task", (field, v, prev, sel) => {
+    if(field === "label"){
+      if(prev === null) state.trial.firstLabelMs = Math.round(performance.now() - state.trial.shownAt);
+      else if(prev !== v) state.trial.labelChanges++;
+    }
+    next.disabled = sel.label === null || sel.confidence === null;
+  });
+  show("screen-task");
+}
+// Time spent with the tab hidden is tracked so it can be excluded from reading time.
+document.addEventListener("visibilitychange", () => {
+  const t = state.trial; if(!t) return;
+  if(document.hidden) t.hiddenSince = performance.now();
+  else if(t.hiddenSince !== null){ t.hiddenMs += performance.now() - t.hiddenSince; t.hiddenSince = null; }
+});
+
+document.getElementById("task-next-btn").addEventListener("click", () => {
+  const s = state.session, t = state.trial, sel = state.taskSel;
+  if(!s || !t || sel.label === null || sel.confidence === null) return;
+  const now = performance.now();
+  const hiddenMs = Math.round(t.hiddenMs + (t.hiddenSince !== null ? now - t.hiddenSince : 0));
+  const rtMs = Math.round(now - t.shownAt);
+  const isCheck = t.item.type === "check";
+  const rec = {
+    kind: "trial",
+    recordId: uid(),
+    sessionId: s.sessionId,
+    participant: s.participant,
+    condition: CONFIG.CONDITION,
+    studyVersion: CONFIG.STUDY_VERSION,
+    trialIndex: s.progress + 1,
+    itemType: isCheck ? "attention_check" : "review",
+    reviewId: t.item.id,
+    reviewWords: wordCount(t.content.text),
+    goldLabel: t.content.gold,
+    chosenLabel: sel.label,
+    correct: sel.label === t.content.gold ? 1 : 0,
+    confidence: sel.confidence,
+    rtMs,                                  // review shown -> Next clicked
+    activeMs: rtMs - hiddenMs,             // same, minus time the tab was hidden
+    hiddenMs,
+    msToFirstLabel: t.firstLabelMs,
+    labelChanges: t.labelChanges,
+    baselineAiLabel: (!isCheck && t.content.review.ai_label !== undefined) ? t.content.review.ai_label : null, // never shown in this condition
+    afterReload: t.afterReload,
+    shownAt: t.shownAtIso,
+    submittedAt: new Date().toISOString(),
+  };
+  queueRecord(rec);
+  state.trial = null;
+  if(isCheck && !rec.correct) s.attentionFails++;
+  s.progress++;
+  saveSession();
+  if(s.attentionFails >= ATTENTION_CHECKS.length){ terminateSession(); return; }
+  if(s.progress >= s.items.length){ s.taskEndedAt = Date.now(); finishSession(); }
+  else renderTask();
+});
+
+document.getElementById("exit-btn").addEventListener("click", () => {
+  if(!confirm(COPY.task.exitConfirm)) return;
+  const s = state.session;
+  s.status = "exited";
+  saveSession();
+  queueRecord(sessionRecord("exited"));
+  state.trial = null;
+  renderHome();
+});
+
+function terminateSession(){
+  const s = state.session;
+  s.status = "terminated";
+  saveSession();
+  queueRecord(sessionRecord("terminated"));
+  show("screen-terminated");
+}
+document.getElementById("term-restart-btn").addEventListener("click", () => renderIdScreen());
+
+/* ======================= FINISH ======================= */
+function finishSession(){
+  const s = state.session;
+  s.status = "complete";
+  if(!s.taskEndedAt) s.taskEndedAt = Date.now();
+  saveSession();
+  queueRecord(sessionRecord("complete"));
+  renderDone();
+}
+
+/* ======================= SESSION SUMMARY RECORD ======================= */
+function sessionRecord(status, extra){
+  const s = state.session;
+  const reviews = getDB().filter(r => r.kind === "trial" && r.sessionId === s.sessionId && r.itemType === "review");
+  const n = reviews.length;
+  const nCorrect = reviews.reduce((a, r) => a + r.correct, 0);
+  const mean = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length * 1000) / 1000 : null;
+  const now = Date.now();
+  return Object.assign({
+    kind: "session",
+    recordId: uid(),
+    sessionId: s.sessionId,
+    participant: s.participant,
+    condition: CONFIG.CONDITION,
+    studyVersion: CONFIG.STUDY_VERSION,
+    status,
+    nReviewsAssigned: s.items.filter(i => i.type === "review").length,
+    nReviewsDone: n,
+    nCorrect,
+    accuracy: n ? Math.round(nCorrect / n * 10000) / 10000 : null,
+    meanConfidence: mean(reviews.map(r => r.confidence)),
+    meanActiveSecPerReview: mean(reviews.map(r => r.activeMs / 1000)),
+    attentionFails: s.attentionFails,
+    practiceFirstTryCorrect: s.practiceFirstTryCorrect,
+    setupSec: s.taskStartedAt ? Math.round((s.taskStartedAt - s.startedAt) / 1000) : null,   // instructions + practice
+    taskSec: s.taskStartedAt ? Math.round(((s.taskEndedAt || now) - s.taskStartedAt) / 1000) : null,
+    totalSec: Math.round((now - s.startedAt) / 1000),
+    startedAt: new Date(s.startedAt).toISOString(),
+    recordedAt: new Date(now).toISOString(),
+  }, extra || {});
+}
+
+/* ======================= DONE ======================= */
+function renderDone(){
+  updateSyncStatus();
+  show("screen-done");
+  flushQueue();
+}
+document.getElementById("done-retry-btn").addEventListener("click", () => { lastSyncFailed = false; flushQueue(); });
+document.getElementById("done-download-btn").addEventListener("click", () => {
+  const sid = state.session ? state.session.sessionId : null;
+  downloadCSV(getDB().filter(r => r.sessionId === sid), "my-review-study-responses.csv");
+});
+
+/* ======================= FEEDBACK ======================= */
+document.getElementById("feedback-submit-btn").addEventListener("click", () => {
+  const text = document.getElementById("feedback-text").value.trim();
+  if(!text) return;
+  queueRecord({
+    kind: "feedback", recordId: uid(),
+    participant: state.session ? state.session.participant : "anonymous",
+    sessionId: state.session ? state.session.sessionId : null,
+    condition: CONFIG.CONDITION, studyVersion: CONFIG.STUDY_VERSION,
+    text, submittedAt: new Date().toISOString(),
+  });
+  document.getElementById("feedback-text").value = "";
+  document.getElementById("feedback-confirm").textContent = COPY.feedback.confirmMsg;
+});
+
+/* ======================= DATA VIEW (researcher) ======================= */
+function renderDataStats(){
+  const db = getDB();
+  const [l1, l2, l3] = COPY.data.statLabels;
+  const nTrials = db.filter(r => r.kind === "trial" && r.itemType === "review").length;
+  const nDone = db.filter(r => r.kind === "session" && r.status === "complete").length;
+  document.getElementById("data-stats").innerHTML = `
+    <div class="stat"><b>${nTrials}</b><span>${l1}</span></div>
+    <div class="stat"><b>${nDone}</b><span>${l2}</span></div>
+    <div class="stat"><b>${getPending().length}</b><span>${l3}</span></div>`;
+  document.getElementById("data-backend").textContent = CONFIG.ENDPOINT ? COPY.data.backendOn : COPY.data.backendOff;
+}
+function renderDataView(){
+  renderDataStats();
+  document.getElementById("data-head").innerHTML = COPY.data.tableHeaders.map(h => `<th>${h}</th>`).join("");
+  const rows = getDB().filter(r => r.kind === "trial").slice().reverse();
+  document.querySelector("#data-table tbody").innerHTML = rows.map(r => {
+    const item = r.itemType === "review" ? fmt(COPY.data.reviewItem, { id: escapeHtml(r.reviewId) }) : fmt(COPY.data.checkItem, { id: escapeHtml(r.reviewId) });
+    return `<tr><td>${escapeHtml(r.participant)}</td><td>${item}</td><td>${labelName(r.goldLabel)}</td><td>${labelName(r.chosenLabel)}${r.correct ? "" : " ✗"}</td><td>${r.confidence}</td><td>${(r.activeMs / 1000).toFixed(1)}</td><td>${new Date(r.submittedAt).toLocaleString()}</td></tr>`;
+  }).join("");
+  show("screen-data");
+}
+document.getElementById("export-csv-btn").addEventListener("click", () => downloadCSV(getDB(), "review-study-" + CONFIG.CONDITION + ".csv"));
+document.getElementById("export-json-btn").addEventListener("click", () =>
+  downloadBlob(JSON.stringify(getDB(), null, 2), "review-study-" + CONFIG.CONDITION + ".json", "application/json"));
+document.getElementById("data-retry-btn").addEventListener("click", () => { lastSyncFailed = false; flushQueue(); });
+document.getElementById("clear-data-btn").addEventListener("click", () => {
+  if(confirm(COPY.data.clearConfirm)){ saveDB([]); renderDataView(); }
+});
+
+/* ======================= UTIL ======================= */
+function uid(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+}
+function downloadCSV(records, filename){
+  if(records.length === 0){ downloadBlob("no data yet", filename, "text/csv"); return; }
+  const cols = [];
+  records.forEach(r => Object.keys(r).forEach(k => { if(!cols.includes(k)) cols.push(k); }));
+  const cell = (v) => {
+    let s = v === null || v === undefined ? "" : String(v);
+    if(/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  downloadBlob([cols.join(",")].concat(records.map(r => cols.map(c => cell(r[c])).join(","))).join("\n"), filename, "text/csv");
+}
+function downloadBlob(content, filename, mime){
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ======================= STATIC COPY ======================= */
+function setHTML(id, html){ document.getElementById(id).innerHTML = html; }
+function applyStaticCopy(){
+  document.title = COPY.pageTitle;
+  const L = COPY.landing;
+  setHTML("ticket-admit", L.ticketAdmit);
+  setHTML("ticket-title", L.ticketTitle);
+  setHTML("ticket-stub", L.ticketStub);
+  setHTML("ticket-hint", L.ticketHint);
+  document.getElementById("ticket").setAttribute("aria-label", L.ticketHint);
+  setHTML("letter-title", L.letterTitle);
+  setHTML("letter-body", L.letterParagraphs.map(p => `<p>${p}</p>`).join(""));
+  setHTML("continue-btn", L.continueBtn);
+
+  setHTML("nav-brand", COPY.nav.brand);
+  document.querySelectorAll(".nav-btn").forEach(b => { if(COPY.nav[b.dataset.nav] !== undefined) b.innerHTML = COPY.nav[b.dataset.nav]; });
+
+  const H = COPY.home;
+  setHTML("home-tag", H.tag);
+  setHTML("home-title", H.title);
+  setHTML("home-subtitle", fmt(H.subtitle, { n: CONFIG.N_TRIALS }));
+  setHTML("home-sample-text", H.sampleText);
+  setHTML("home-sample-caption", H.sampleCaption);
+  setHTML("home-start-btn", H.startBtn);
+
+  const I = COPY.idScreen;
+  setHTML("id-heading", I.heading);
+  setHTML("id-name-label", I.nameLabel);
+  document.getElementById("participant-input").placeholder = I.namePlaceholder;
+  setHTML("id-name-hint", I.nameHint);
+  setHTML("id-consent", I.consent);
+  setHTML("id-continue-btn", I.continueBtn);
+
+  setHTML("tut-back-btn", COPY.tutorial.backBtn);
+  setHTML("tut-next-btn", COPY.tutorial.nextBtn);
+
+  setHTML("practice-instructions", COPY.practice.instructions);
+  setHTML("practice-q", COPY.task.question);
+  setHTML("practice-conf-q", COPY.task.confidenceQuestion);
+
+  setHTML("task-q", COPY.task.question);
+  setHTML("task-conf-q", COPY.task.confidenceQuestion);
+  setHTML("exit-btn", COPY.task.exitBtn);
+
+  setHTML("done-heading", COPY.done.heading);
+  setHTML("done-body", COPY.done.body);
+  setHTML("done-retry-btn", COPY.done.retryBtn);
+  setHTML("done-download-btn", COPY.done.downloadBtn);
+
+  setHTML("term-heading", COPY.terminated.heading);
+  setHTML("term-body", COPY.terminated.body);
+  setHTML("term-restart-btn", COPY.terminated.restartBtn);
+
+  const A = COPY.about;
+  setHTML("about-heading", A.heading);
+  setHTML("about-intro", A.intro);
+  setHTML("about-record-heading", A.recordHeading);
+  setHTML("about-record-body", A.recordBody);
+  setHTML("about-source-heading", A.sourceHeading);
+  setHTML("about-source-body", A.sourceBody);
+  setHTML("about-citation", A.citation);
+
+  setHTML("feedback-heading", COPY.feedback.heading);
+  setHTML("feedback-prompt", COPY.feedback.prompt);
+  document.getElementById("feedback-text").placeholder = COPY.feedback.placeholder;
+  setHTML("feedback-submit-btn", COPY.feedback.submitBtn);
+
+  const D = COPY.data;
+  setHTML("data-heading", D.heading);
+  setHTML("data-intro", D.intro);
+  setHTML("export-csv-btn", D.csvBtn);
+  setHTML("export-json-btn", D.jsonBtn);
+  setHTML("data-retry-btn", D.retryBtn);
+  setHTML("clear-data-btn", D.clearBtn);
+}
+
+/* ======================= INIT ======================= */
+(async function init(){
+  try{
+    await loadReviews();
+  }catch(e){
+    console.error("Failed to load reviews:", e);
+    document.body.innerHTML = `<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0b1330; color:#fff; font-family:'Inter',sans-serif; text-align:center; padding:40px;">
+      <div><h1 style="font-family:'Fraunces',serif; color:#fff; font-size:26px; margin-bottom:12px;">${COPY.loadError.heading}</h1>
+      <p style="color:#c7cde2; max-width:460px; margin:0 auto; line-height:1.6;">${fmt(COPY.loadError.body, { file: escapeHtml(CONFIG.DATA_URL), error: escapeHtml(e.message) })}</p></div></div>`;
+    return;
+  }
+  applyStaticCopy();
+  if(IS_RESEARCHER) document.getElementById("nav-data").hidden = false;
+  updateSyncStatus();
+  flushQueue();
+  setInterval(flushQueue, 15000);
+  // A reload in the middle of a session drops the participant back where they were.
+  if(state.session && state.session.status === "in_progress"){
+    resumedAfterReload = state.session.stage === "task";
+    resumeSession();
+  }
+  else show("screen-landing");
+})();
+</script>
+</body>
+</html>

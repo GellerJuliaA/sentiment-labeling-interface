@@ -1,0 +1,63 @@
+/**
+ * Backend for the movie review study: receives records from index.html and
+ * appends them to tabs of this Google Sheet ("trials", "sessions", "feedback").
+ * Columns are created automatically from the record fields.
+ *
+ * Setup: see README.md ("Backend setup").
+ */
+const SHEET_FOR_KIND = { trial: "trials", session: "sessions", feedback: "feedback" };
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000); // several participants can submit at the same moment
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const records = Array.isArray(body.records) ? body.records : [body];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const byTab = {};
+    records.forEach(function (r) {
+      const tab = SHEET_FOR_KIND[r.kind] || "other";
+      (byTab[tab] = byTab[tab] || []).push(r);
+    });
+    Object.keys(byTab).forEach(function (tab) { appendRecords_(ss, tab, byTab[tab]); });
+    return json_({ ok: true, saved: records.length });
+  } catch (err) {
+    return json_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Open the /exec URL in a browser to check the deployment is live.
+function doGet() {
+  return json_({ ok: true, message: "Review study backend is running." });
+}
+
+function appendRecords_(ss, tabName, recs) {
+  const sh = ss.getSheetByName(tabName) || ss.insertSheet(tabName);
+  const lastCol = sh.getLastColumn();
+  let headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].filter(String) : [];
+  if (headers.length === 0) headers = ["receivedAt"];
+  recs.forEach(function (r) {
+    Object.keys(r).forEach(function (k) { if (headers.indexOf(k) === -1) headers.push(k); });
+  });
+  const firstEmptyRow = Math.max(sh.getLastRow(), 1) + 1;
+  const now = new Date();
+  const rows = recs.map(function (r) {
+    return headers.map(function (h) { return h === "receivedAt" ? now : cell_(r[h]); });
+  });
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sh.getRange(firstEmptyRow, 1, rows.length, headers.length).setValues(rows);
+}
+
+function cell_(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") v = JSON.stringify(v);
+  // Stop typed text (names, comments) from being read as a spreadsheet formula.
+  if (typeof v === "string" && /^[=+\-@]/.test(v)) return "'" + v;
+  return v;
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
