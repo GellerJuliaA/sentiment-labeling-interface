@@ -1,4 +1,10 @@
 /**
+ * @OnlyCurrentDoc
+ * Limits this script's permission to the one Google Sheet it's attached to:
+ * it can't open your other Sheets, Docs, Drive files, or email.
+ */
+
+/**
  * Backend for the movie review study: receives records from index.html and
  * appends them to tabs of this Google Sheet ("trials", "sessions", "feedback").
  * Columns are created automatically from the record fields.
@@ -16,7 +22,8 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const byTab = {};
     records.forEach(function (r) {
-      const tab = SHEET_FOR_KIND[r.kind] || "other";
+      const tab = r && SHEET_FOR_KIND[r.kind];
+      if (!tab) return; // ignore anything that isn't a study record
       (byTab[tab] = byTab[tab] || []).push(r);
     });
     Object.keys(byTab).forEach(function (tab) { appendRecords_(ss, tab, byTab[tab]); });
