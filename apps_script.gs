@@ -21,13 +21,16 @@ function doPost(e) {
     const records = Array.isArray(body.records) ? body.records : [body];
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const byTab = {};
+    let saved = 0;
     records.forEach(function (r) {
-      const tab = r && SHEET_FOR_KIND[r.kind];
+      const tab = r && SHEET_FOR_KIND[r.record_type || r.kind];
       if (!tab) return; // ignore anything that isn't a study record
       (byTab[tab] = byTab[tab] || []).push(r);
+      saved++;
     });
     Object.keys(byTab).forEach(function (tab) { appendRecords_(ss, tab, byTab[tab]); });
-    return json_({ ok: true, saved: records.length });
+    // The website checks this count, so rows that weren't saved get retried instead of lost.
+    return json_({ ok: true, saved: saved });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   } finally {
@@ -44,14 +47,14 @@ function appendRecords_(ss, tabName, recs) {
   const sh = ss.getSheetByName(tabName) || ss.insertSheet(tabName);
   const lastCol = sh.getLastColumn();
   let headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].filter(String) : [];
-  if (headers.length === 0) headers = ["receivedAt"];
+  if (headers.length === 0) headers = ["saved_time"];
   recs.forEach(function (r) {
     Object.keys(r).forEach(function (k) { if (headers.indexOf(k) === -1) headers.push(k); });
   });
   const firstEmptyRow = Math.max(sh.getLastRow(), 1) + 1;
   const now = new Date();
   const rows = recs.map(function (r) {
-    return headers.map(function (h) { return h === "receivedAt" ? now : cell_(r[h]); });
+    return headers.map(function (h) { return h === "saved_time" ? now : cell_(r[h]); });
   });
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   sh.getRange(firstEmptyRow, 1, rows.length, headers.length).setValues(rows);

@@ -206,6 +206,9 @@ textarea{width:100%; min-height:110px; border-radius:12px; border:1.5px solid va
 .progress-fill{background:var(--gold); height:100%; border-radius:999px; transition:width .3s ease;}
 
 /* ---------- DONE / SYNC ---------- */
+.done-sub{text-align:left; margin:26px 0 0;}
+#done-table{text-align:left;}
+#done-table td.wrap{white-space:normal; min-width:220px; color:var(--ink-soft);}
 .sync{border-radius:12px; padding:14px 18px; font-size:14.5px; line-height:1.55; margin:18px auto 0; max-width:520px; text-align:left;}
 .sync.ok{background:#e9f9f1; color:#1c6b46;}
 .sync.wait{background:#fff7e6; color:#7a5b12;}
@@ -375,11 +378,17 @@ th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
     <div class="content-card center">
       <h2 id="done-heading"></h2>
       <p id="done-body"></p>
+      <div class="data-actions center"><button class="btn btn-primary" id="done-more-btn"></button></div>
       <div id="done-sync" class="sync" role="status"></div>
-      <div class="data-actions center">
-        <button class="btn btn-outline btn-small" id="done-retry-btn" hidden></button>
-        <button class="btn btn-outline btn-small" id="done-download-btn" hidden></button>
+      <h3 class="done-sub" id="done-answers-heading"></h3>
+      <div class="table-scroll">
+        <table id="done-table"><thead><tr id="done-head"></tr></thead><tbody></tbody></table>
       </div>
+      <div class="data-actions center">
+        <button class="btn btn-outline btn-small" id="done-download-btn"></button>
+        <button class="btn btn-outline btn-small" id="done-retry-btn" hidden></button>
+      </div>
+      <p class="small-note" id="done-email-note"></p>
     </div>
   </div>
 </section>
@@ -452,7 +461,7 @@ th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
 const CONFIG = {
   // Which arm of the study this page is. Every saved record carries it.
   CONDITION: "no_ai",
-  STUDY_VERSION: "a3-no-ai-v2",
+  STUDY_VERSION: "a3-no-ai-v4",
   // Real reviews per participant. The two attention checks are added on top.
   N_TRIALS: 5,
   // The study dataset (built from the A2 CSV by make_reviews_json.py).
@@ -497,6 +506,8 @@ var COPY = {
     startBtn: "Start study",
     resumeTemplate: "You have a session in progress as <b>{name}</b>.",
     resumeBtn: "Resume",
+    moreTemplate: "You’ve labeled {count} reviews as <b>{name}</b>.",
+    moreBtn: "Label {n} more",
     noBackendWarning: "<span><b>Setup needed:</b> no backend URL is set, so responses are only saved in this browser. Add your Apps Script URL to <code>CONFIG.ENDPOINT</code> before sharing the link.</span>",
   },
 
@@ -574,8 +585,8 @@ var COPY = {
     confHigh: "5 = certain",
     nextBtn: "Next review",
     lastBtn: "Finish reviews",
-    exitBtn: "Exit study",
-    exitConfirm: "Leave the study? Answers you’ve already submitted are saved, but you won’t be able to finish this session.",
+    exitBtn: "Save & exit",
+    exitConfirm: "Save your progress and leave? Your answers so far are saved, and you can pick up where you left off from the home page in this browser.",
   },
 
   labels: {
@@ -585,7 +596,8 @@ var COPY = {
 
   done: {
     heading: "You’re done. Thank you!",
-    body: "Thanks for taking part in this study.",
+    body: "Thanks for taking part in this study. Want to keep going? You can label {n} more reviews, or close this tab.",
+    moreBtn: "Label {n} more",
     sync: {
       ok: "✓ Your responses are saved.",
       wait: "Saving your responses… please keep this tab open for a moment.",
@@ -594,6 +606,9 @@ var COPY = {
     },
     retryBtn: "Try saving again",
     downloadBtn: "Download my responses",
+    answersHeading: "Your answers",
+    tableHeaders: ["#", "Review", "Your answer", "Confidence"],
+    emailNote: "If anything went wrong, download your responses and email the file to {email}.",
   },
 
   terminated: {
@@ -742,8 +757,9 @@ async function flushQueue(){
     });
     const out = await res.json();
     if(!out.ok) throw new Error(out.error || "backend rejected the records");
-    const sent = new Set(batch.map(r => r.recordId));
-    setPending(getPending().filter(r => !sent.has(r.recordId)));
+    if(typeof out.saved === "number" && out.saved !== batch.length) throw new Error("backend saved " + out.saved + " of " + batch.length + " rows");
+    const sent = new Set(batch.map(r => r.record_id));
+    setPending(getPending().filter(r => !sent.has(r.record_id)));
     ok = true;
   }catch(e){
     console.warn("Upload failed, will retry:", e);
@@ -765,7 +781,6 @@ function updateSyncStatus(){
   el.className = "sync " + ({ ok: "ok", wait: "wait", err: "err", local: "wait" }[st]);
   el.innerHTML = fmt(COPY.done.sync[st], { email: CONFIG.CONTACT_EMAIL });
   document.getElementById("done-retry-btn").hidden = st !== "err";
-  document.getElementById("done-download-btn").hidden = !(st === "err" || st === "local");
   if(document.getElementById("screen-data").classList.contains("active")) renderDataStats();
 }
 window.addEventListener("online", flushQueue);
@@ -824,7 +839,11 @@ document.getElementById("ticket").addEventListener("click", () => {
     }, 400);
   }, 550);
 });
-document.getElementById("continue-btn").addEventListener("click", () => startOrResume());
+// A returning participant who already finished a batch lands on Home, where "Label 5 more" waits.
+document.getElementById("continue-btn").addEventListener("click", () => {
+  if(state.session && state.session.status === "complete") renderHome();
+  else startOrResume();
+});
 
 /* ======================= HOME ======================= */
 function renderHome(){
@@ -845,6 +864,17 @@ function renderHome(){
     btn.className = "btn btn-primary btn-small";
     btn.textContent = COPY.home.resumeBtn;
     btn.addEventListener("click", resumeSession);
+    banner.appendChild(btn);
+    slot.appendChild(banner);
+  } else if(s && s.status === "complete"){
+    const count = getDB().filter(r => r.record_type === "trial" && r.session_id === s.sessionId && r.item_type === "review").length;
+    const banner = document.createElement("div");
+    banner.className = "banner resume";
+    banner.innerHTML = `<span>${fmt(COPY.home.moreTemplate, { count, name: escapeHtml(s.participant) })}</span>`;
+    const btn = document.createElement("button");
+    btn.className = "btn btn-primary btn-small";
+    btn.textContent = fmt(COPY.home.moreBtn, { n: CONFIG.N_TRIALS });
+    btn.addEventListener("click", startNextBatch);
     banner.appendChild(btn);
     slot.appendChild(banner);
   }
@@ -884,6 +914,10 @@ document.getElementById("id-continue-btn").addEventListener("click", () => {
     stage: "tutorial",
     items: buildAssignment(),
     progress: 0,
+    batchNumber: 1,        // a batch = N_TRIALS reviews + the attention checks
+    batchStart: 0,         // index in items where the current batch begins
+    batchesCompleted: 0,
+    batchAttentionFails: 0,
     attentionFails: 0,
     practiceFirstTryCorrect: 0,
     startedAt: Date.now(),
@@ -1076,12 +1110,14 @@ function renderTask(){
     console.warn("Skipping item not found in dataset:", item);
     s.progress++; saveSession(); renderTask(); return;
   }
-  const total = s.items.length;
+  const start = s.batchStart || 0;
+  const total = s.items.length - start;
+  const pos = s.progress - start;
   document.getElementById("task-text").textContent = content.text;
-  document.getElementById("task-progress-label").textContent = fmt(COPY.task.progressTemplate, { n: s.progress + 1, total });
-  document.getElementById("task-progress-fill").style.width = (s.progress / total * 100) + "%";
+  document.getElementById("task-progress-label").textContent = fmt(COPY.task.progressTemplate, { n: pos + 1, total });
+  document.getElementById("task-progress-fill").style.width = (pos / total * 100) + "%";
   const next = document.getElementById("task-next-btn");
-  next.textContent = s.progress === total - 1 ? COPY.task.lastBtn : COPY.task.nextBtn;
+  next.textContent = pos === total - 1 ? COPY.task.lastBtn : COPY.task.nextBtn;
   next.disabled = true;
 
   const now = performance.now();
@@ -1116,47 +1152,49 @@ document.getElementById("task-next-btn").addEventListener("click", () => {
   const hiddenMs = Math.round(t.hiddenMs + (t.hiddenSince !== null ? now - t.hiddenSince : 0));
   const rtMs = Math.round(now - t.shownAt);
   const isCheck = t.item.type === "check";
+  const sec = (ms) => Math.round(ms / 10) / 100; // milliseconds -> seconds, 2 decimals
+  // These keys become the column names in the Google Sheet's "trials" tab.
   const rec = {
-    kind: "trial",
-    recordId: uid(),
-    sessionId: s.sessionId,
-    participant: s.participant,
+    record_type: "trial",
+    record_id: uid(),
+    session_id: s.sessionId,
+    uniqname: s.participant,
     condition: CONFIG.CONDITION,
-    studyVersion: CONFIG.STUDY_VERSION,
-    trialIndex: s.progress + 1,
-    itemType: isCheck ? "attention_check" : "review",
-    reviewId: t.item.id,
-    reviewWords: wordCount(t.content.text),
-    goldLabel: t.content.gold,
-    chosenLabel: sel.label,
-    correct: sel.label === t.content.gold ? 1 : 0,
-    confidence: sel.confidence,
-    rtMs,                                  // review shown -> Next clicked
-    activeMs: rtMs - hiddenMs,             // same, minus time the tab was hidden
-    hiddenMs,
-    msToFirstLabel: t.firstLabelMs,
-    labelChanges: t.labelChanges,
-    baselineAiLabel: (!isCheck && t.content.review.ai_label !== undefined) ? t.content.review.ai_label : null, // never shown in this condition
-    afterReload: t.afterReload,
-    shownAt: t.shownAtIso,
-    submittedAt: new Date().toISOString(),
+    study_version: CONFIG.STUDY_VERSION,
+    batch_number: s.batchNumber || 1,
+    item_number: s.progress + 1,
+    item_type: isCheck ? "attention_check" : "review",
+    review_id: t.item.id,                      // row number in the study CSV
+    review_word_count: wordCount(t.content.text),
+    true_label: t.content.gold,                // 1 = positive, 0 = negative
+    participant_label: sel.label,
+    is_correct: sel.label === t.content.gold ? 1 : 0,
+    confidence: sel.confidence,                // 1-5
+    time_on_item_sec: sec(rtMs),               // review shown -> Next clicked
+    active_time_sec: sec(rtMs - hiddenMs),     // same, minus time the tab was hidden
+    hidden_time_sec: sec(hiddenMs),
+    time_to_first_choice_sec: t.firstLabelMs === null ? null : sec(t.firstLabelMs),
+    times_answer_changed: t.labelChanges,
+    ai_label: (!isCheck && t.content.review.ai_label !== undefined) ? t.content.review.ai_label : null, // never shown in this condition
+    after_page_reload: t.afterReload,
+    shown_time: t.shownAtIso,
+    submitted_time: new Date().toISOString(),
   };
   queueRecord(rec);
   state.trial = null;
-  if(isCheck && !rec.correct) s.attentionFails++;
+  if(isCheck && !rec.is_correct){ s.attentionFails++; s.batchAttentionFails = (s.batchAttentionFails || 0) + 1; }
   s.progress++;
   saveSession();
-  if(s.attentionFails >= ATTENTION_CHECKS.length){ terminateSession(); return; }
+  // Missing both checks within one batch ends the session.
+  if(s.batchAttentionFails >= ATTENTION_CHECKS.length){ terminateSession(); return; }
   if(s.progress >= s.items.length){ s.taskEndedAt = Date.now(); finishSession(); }
   else renderTask();
 });
 
 document.getElementById("exit-btn").addEventListener("click", () => {
   if(!confirm(COPY.task.exitConfirm)) return;
-  const s = state.session;
-  s.status = "exited";
-  saveSession();
-  queueRecord(sessionRecord("exited"));
+  // The session stays "in_progress" in this browser, so Home offers Resume.
+  queueRecord(sessionRecord("paused"));
   state.trial = null;
   renderHome();
 });
@@ -1175,53 +1213,89 @@ function finishSession(){
   const s = state.session;
   s.status = "complete";
   if(!s.taskEndedAt) s.taskEndedAt = Date.now();
+  s.batchesCompleted = (s.batchesCompleted || 0) + 1;
   saveSession();
   queueRecord(sessionRecord("complete"));
   renderDone();
 }
+// "Label 5 more": same session and uniqname, a fresh random batch (no tutorial or practice).
+function startNextBatch(){
+  const s = state.session;
+  if(!s || s.status !== "complete") return;
+  s.batchNumber = (s.batchNumber || 1) + 1;
+  s.batchStart = s.items.length;
+  s.items = s.items.concat(buildAssignment());
+  s.batchAttentionFails = 0;
+  s.status = "in_progress";
+  s.stage = "task";
+  s.taskEndedAt = null;
+  saveSession();
+  renderTask();
+}
+document.getElementById("done-more-btn").addEventListener("click", startNextBatch);
 
 /* ======================= SESSION SUMMARY RECORD ======================= */
 function sessionRecord(status, extra){
   const s = state.session;
-  const reviews = getDB().filter(r => r.kind === "trial" && r.sessionId === s.sessionId && r.itemType === "review");
+  const reviews = getDB().filter(r => r.record_type === "trial" && r.session_id === s.sessionId && r.item_type === "review");
   const n = reviews.length;
-  const nCorrect = reviews.reduce((a, r) => a + r.correct, 0);
+  const nCorrect = reviews.reduce((a, r) => a + r.is_correct, 0);
   const mean = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length * 1000) / 1000 : null;
   const now = Date.now();
+  // These keys become the column names in the Google Sheet's "sessions" tab.
   return Object.assign({
-    kind: "session",
-    recordId: uid(),
-    sessionId: s.sessionId,
-    participant: s.participant,
+    record_type: "session",
+    record_id: uid(),
+    session_id: s.sessionId,
+    uniqname: s.participant,
     condition: CONFIG.CONDITION,
-    studyVersion: CONFIG.STUDY_VERSION,
-    status,
-    nReviewsAssigned: s.items.filter(i => i.type === "review").length,
-    nReviewsDone: n,
-    nCorrect,
+    study_version: CONFIG.STUDY_VERSION,
+    status,                                    // started, paused, complete (after each batch), or terminated
+    reviews_assigned: s.items.filter(i => i.type === "review").length,
+    reviews_done: n,
+    reviews_correct: nCorrect,
     accuracy: n ? Math.round(nCorrect / n * 10000) / 10000 : null,
-    meanConfidence: mean(reviews.map(r => r.confidence)),
-    meanActiveSecPerReview: mean(reviews.map(r => r.activeMs / 1000)),
-    attentionFails: s.attentionFails,
-    practiceFirstTryCorrect: s.practiceFirstTryCorrect,
-    setupSec: s.taskStartedAt ? Math.round((s.taskStartedAt - s.startedAt) / 1000) : null,   // instructions + practice
-    taskSec: s.taskStartedAt ? Math.round(((s.taskEndedAt || now) - s.taskStartedAt) / 1000) : null,
-    totalSec: Math.round((now - s.startedAt) / 1000),
-    startedAt: new Date(s.startedAt).toISOString(),
-    recordedAt: new Date(now).toISOString(),
+    mean_confidence: mean(reviews.map(r => r.confidence)),
+    mean_active_time_sec: mean(reviews.map(r => r.active_time_sec)),
+    attention_checks_failed: s.attentionFails,
+    practice_correct_first_try: s.practiceFirstTryCorrect,
+    batches_completed: s.batchesCompleted || 0,
+    setup_time_sec: s.taskStartedAt ? Math.round((s.taskStartedAt - s.startedAt) / 1000) : null,   // instructions + practice
+    task_time_sec: Math.round(getDB().filter(r => r.record_type === "trial" && r.session_id === s.sessionId)
+                     .reduce((a, r) => a + r.active_time_sec, 0)),                              // time on items, breaks excluded
+    total_time_sec: Math.round((now - s.startedAt) / 1000),                                      // since start, breaks included
+    started_time: new Date(s.startedAt).toISOString(),
+    recorded_time: new Date(now).toISOString(),
   }, extra || {});
 }
 
 /* ======================= DONE ======================= */
 function renderDone(){
+  const sid = state.session ? state.session.sessionId : null;
+  const answers = getDB().filter(r => r.record_type === "trial" && r.session_id === sid && r.item_type === "review");
+  document.getElementById("done-head").innerHTML = COPY.done.tableHeaders.map(h => `<th>${h}</th>`).join("");
+  document.querySelector("#done-table tbody").innerHTML = answers.map((r, i) => {
+    const rev = REVIEW_BY_ID.get(r.review_id);
+    const snippet = rev ? (rev.text.length > 90 ? rev.text.slice(0, 90).trim() + "…" : rev.text) : "";
+    return `<tr><td>${i + 1}</td><td class="wrap">${escapeHtml(snippet)}</td><td>${labelName(r.participant_label)}</td><td>${r.confidence} / 5</td></tr>`;
+  }).join("");
   updateSyncStatus();
   show("screen-done");
   flushQueue();
 }
 document.getElementById("done-retry-btn").addEventListener("click", () => { lastSyncFailed = false; flushQueue(); });
+// Participants' copy leaves out the correct labels, the AI's labels, and their score,
+// since they may still do the other version of the study. review_id lets you re-score it.
+const HIDDEN_FROM_PARTICIPANTS = ["true_label", "is_correct", "ai_label", "reviews_correct", "accuracy"];
 document.getElementById("done-download-btn").addEventListener("click", () => {
-  const sid = state.session ? state.session.sessionId : null;
-  downloadCSV(getDB().filter(r => r.sessionId === sid), "my-review-study-responses.csv");
+  const s = state.session;
+  if(!s) return;
+  const rows = getDB().filter(r => r.session_id === s.sessionId).map(r => {
+    const copy = Object.assign({}, r);
+    HIDDEN_FROM_PARTICIPANTS.forEach(k => delete copy[k]);
+    return copy;
+  });
+  downloadCSV(rows, "review-study-" + s.participant.replace(/[^a-z0-9_-]/gi, "") + "-" + CONFIG.CONDITION + ".csv");
 });
 
 /* ======================= FEEDBACK ======================= */
@@ -1229,11 +1303,11 @@ document.getElementById("feedback-submit-btn").addEventListener("click", () => {
   const text = document.getElementById("feedback-text").value.trim();
   if(!text) return;
   queueRecord({
-    kind: "feedback", recordId: uid(),
-    participant: state.session ? state.session.participant : "anonymous",
-    sessionId: state.session ? state.session.sessionId : null,
-    condition: CONFIG.CONDITION, studyVersion: CONFIG.STUDY_VERSION,
-    text, submittedAt: new Date().toISOString(),
+    record_type: "feedback", record_id: uid(),
+    uniqname: state.session ? state.session.participant : "anonymous",
+    session_id: state.session ? state.session.sessionId : null,
+    condition: CONFIG.CONDITION, study_version: CONFIG.STUDY_VERSION,
+    feedback: text, submitted_time: new Date().toISOString(),
   });
   document.getElementById("feedback-text").value = "";
   document.getElementById("feedback-confirm").textContent = COPY.feedback.confirmMsg;
@@ -1243,8 +1317,8 @@ document.getElementById("feedback-submit-btn").addEventListener("click", () => {
 function renderDataStats(){
   const db = getDB();
   const [l1, l2, l3] = COPY.data.statLabels;
-  const nTrials = db.filter(r => r.kind === "trial" && r.itemType === "review").length;
-  const nDone = db.filter(r => r.kind === "session" && r.status === "complete").length;
+  const nTrials = db.filter(r => r.record_type === "trial" && r.item_type === "review").length;
+  const nDone = db.filter(r => r.record_type === "session" && r.status === "complete").length;
   document.getElementById("data-stats").innerHTML = `
     <div class="stat"><b>${nTrials}</b><span>${l1}</span></div>
     <div class="stat"><b>${nDone}</b><span>${l2}</span></div>
@@ -1254,10 +1328,10 @@ function renderDataStats(){
 function renderDataView(){
   renderDataStats();
   document.getElementById("data-head").innerHTML = COPY.data.tableHeaders.map(h => `<th>${h}</th>`).join("");
-  const rows = getDB().filter(r => r.kind === "trial").slice().reverse();
+  const rows = getDB().filter(r => r.record_type === "trial").slice().reverse();
   document.querySelector("#data-table tbody").innerHTML = rows.map(r => {
-    const item = r.itemType === "review" ? fmt(COPY.data.reviewItem, { id: escapeHtml(r.reviewId) }) : fmt(COPY.data.checkItem, { id: escapeHtml(r.reviewId) });
-    return `<tr><td>${escapeHtml(r.participant)}</td><td>${item}</td><td>${labelName(r.goldLabel)}</td><td>${labelName(r.chosenLabel)}${r.correct ? "" : " ✗"}</td><td>${r.confidence}</td><td>${(r.activeMs / 1000).toFixed(1)}</td><td>${new Date(r.submittedAt).toLocaleString()}</td></tr>`;
+    const item = r.item_type === "review" ? fmt(COPY.data.reviewItem, { id: escapeHtml(r.review_id) }) : fmt(COPY.data.checkItem, { id: escapeHtml(r.review_id) });
+    return `<tr><td>${escapeHtml(r.uniqname)}</td><td>${item}</td><td>${labelName(r.true_label)}</td><td>${labelName(r.participant_label)}${r.is_correct ? "" : " ✗"}</td><td>${r.confidence}</td><td>${r.active_time_sec.toFixed(1)}</td><td>${new Date(r.submitted_time).toLocaleString()}</td></tr>`;
   }).join("");
   show("screen-data");
 }
@@ -1346,9 +1420,12 @@ function applyStaticCopy(){
   setHTML("exit-btn", COPY.task.exitBtn);
 
   setHTML("done-heading", COPY.done.heading);
-  setHTML("done-body", COPY.done.body);
+  setHTML("done-body", fmt(COPY.done.body, { n: CONFIG.N_TRIALS }));
+  setHTML("done-more-btn", fmt(COPY.done.moreBtn, { n: CONFIG.N_TRIALS }));
   setHTML("done-retry-btn", COPY.done.retryBtn);
   setHTML("done-download-btn", COPY.done.downloadBtn);
+  setHTML("done-answers-heading", COPY.done.answersHeading);
+  setHTML("done-email-note", fmt(COPY.done.emailNote, { email: CONFIG.CONTACT_EMAIL }));
 
   setHTML("term-heading", COPY.terminated.heading);
   setHTML("term-body", COPY.terminated.body);
