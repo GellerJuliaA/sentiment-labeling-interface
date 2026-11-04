@@ -36,7 +36,7 @@ const CONFIG = {
 var COPY = {
   pageTitle: "The Movie Review Project",
 
-  nav: { brand: "The Movie Review Project", home: "Home", start: "Label Data", about: "About", feedback: "Give Feedback", data: "Data" },
+  nav: { brand: "The Movie Review Project", home: "Home", instructions: "Instructions", start: "Label Data", about: "About", data: "Data" },
 
   landing: {
     ticketHint: "Click the ticket to begin!",
@@ -127,6 +127,7 @@ var COPY = {
     checkBtn: "Check answer",
     nextBtn: "Next practice review",
     startBtn: "Start the study",
+    reviewDoneBtn: "Done",     // last button when someone opens the Instructions tab just to review
     correctPrefix: "✅ <b>Correct.</b> ",
     incorrectPrefix: "❌ <b>Incorrect.</b> ",
     answerTemplate: "This review is <b>{label}</b>.",
@@ -141,7 +142,7 @@ var COPY = {
     nextBtn: "Next review",
     lastBtn: "Finish reviews",
     exitBtn: "Save & exit",
-    exitConfirm: "Save your progress and leave? Your answers so far are saved, and you can start where you left off from the home page in this browser.",
+    exitConfirm: "Save your progress and leave? Your answers so far are saved and you can start where you left off from the home page in this browser.",
   },
 
   labels: {
@@ -156,7 +157,7 @@ var COPY = {
     sync: {
       ok: "✓ Your responses are saved.",
       wait: "Saving your responses. Please keep this tab open.",
-      err: "Your responses haven't reached the server yet. We'll keep retrying. Please keep this tab open, or download them and email the file to {email}.",
+      err: "Your responses haven't reached the server yet. We'll keep retrying. Please keep this tab open or download them and email the file to {email}.",
       local: "No server is set up, so your responses are saved in this browser only.",
     },
     retryBtn: "Try saving again",
@@ -171,18 +172,10 @@ var COPY = {
     heading: "About this study",
     intro: "This study is part of a Human-AI Interaction class project at the University of Michigan. It looks at how accurately and confidently people can tell whether a movie review is positive or negative.",
     recordHeading: "What we record",
-    recordBody: "Your uniqname and each answer and confidence rating. Nothing else is collected, and the data is used only for this class project.",
+    recordBody: "Your uniqname and each answer and confidence rating. Nothing else is collected and the data is used only for this class project.",
     sourceHeading: "Where the reviews come from",
     sourceBody: "The reviews come from the <strong>Large Movie Review Dataset</strong> (Maas et al., 2011): 50,000 IMDb user reviews, each labeled positive or negative from the reviewer's star rating. This study uses 200 reviews randomly sampled from its training split. The original labels are never shown to you. They are used afterwards to score answers.",
     citation: "Maas, A. L., Daly, R. E., Pham, P. T., Huang, D., Ng, A. Y., &amp; Potts, C. (2011). Learning Word Vectors for Sentiment Analysis. <em>Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics (ACL 2011)</em>, 142–150.",
-  },
-
-  feedback: {
-    heading: "Give feedback",
-    prompt: "Report a problem or leave a comment.",
-    placeholder: "Type your feedback here...",
-    submitBtn: "Send feedback",
-    confirmMsg: "Thanks, your feedback was sent.",
   },
 
   data: {
@@ -507,9 +500,9 @@ th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
   <div class="brand"><span class="brand-dot"></span> <span id="nav-brand"></span></div>
   <div class="nav-links" id="nav-links">
     <button class="nav-btn" data-nav="home"></button>
+    <button class="nav-btn" data-nav="instructions"></button>
     <button class="nav-btn" data-nav="start"></button>
     <button class="nav-btn" data-nav="about"></button>
-    <button class="nav-btn" data-nav="feedback"></button>
     <button class="nav-btn" data-nav="data" id="nav-data" hidden></button>
   </div>
 </nav>
@@ -628,19 +621,6 @@ th{color:var(--ink-soft); font-size:12.5px; font-weight:600;}
       <h3 id="about-source-heading"></h3>
       <p id="about-source-body"></p>
       <div class="cite-box" id="about-citation"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ FEEDBACK ============ -->
-<section id="screen-feedback" class="screen">
-  <div class="page-wrap">
-    <div class="content-card">
-      <h2 id="feedback-heading"></h2>
-      <p id="feedback-prompt"></p>
-      <textarea id="feedback-text"></textarea>
-      <div style="margin-top:14px;"><button class="btn btn-primary" id="feedback-submit-btn"></button></div>
-      <div id="feedback-confirm" class="small-note" role="status"></div>
     </div>
   </div>
 </section>
@@ -789,30 +769,33 @@ let state = {
   practiceChecked: false,
   practiceSel: null,
   taskSel: null,
+  reviewMode: false,   // true while someone is re-reading the Instructions tab
   trial: null,         // the item on screen
 };
 function saveSession(){ lsSet("session", state.session); }
 
 /* ======================= NAV / SCREENS ======================= */
-// No nav links during the timed part, so participants can't wander off mid-review.
-const LOCKED_SCREENS = new Set(["screen-task"]);
+// Screens where the nav links are hidden (none: Instructions stays reachable mid-review).
+const LOCKED_SCREENS = new Set([]);
 function show(id){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   document.getElementById("navbar").classList.toggle("show", id !== "screen-landing");
   document.getElementById("nav-links").hidden = LOCKED_SCREENS.has(id);
   const map = { "screen-home": "home", "screen-id": "start", "screen-tutorial": "start", "screen-practice": "start",
-                "screen-about": "about", "screen-feedback": "feedback", "screen-data": "data" };
-  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.nav === map[id]));
+                "screen-about": "about", "screen-data": "data" };
+  const inReview = state.reviewMode && (id === "screen-tutorial" || id === "screen-practice");
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.nav === (inReview ? "instructions" : map[id])));
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const t = btn.dataset.nav;
-    if(t === "home") renderHome();
+    state.reviewMode = false;
+    if(t === "instructions") openInstructions();
+    else if(t === "home") renderHome();
     else if(t === "start") startOrResume();
     else if(t === "about") show("screen-about");
-    else if(t === "feedback") show("screen-feedback");
     else if(t === "data") renderDataView();
   });
 });
@@ -882,7 +865,22 @@ document.getElementById("home-start-btn").addEventListener("click", () => startO
 // tutorial, so returning to "Label data" never asks for either again.
 function getProfile(){ return lsGet("profile", null); }
 function setProfile(p){ lsSet("profile", p); }
+// Instructions tab: replays the tutorial and both practice reviews, exactly as
+// written in COPY.tutorial / PRACTICE. Nothing is recorded and progress is untouched.
+function openInstructions(){
+  state.reviewMode = true;
+  state.tutStep = 0;
+  renderTutorialStep();
+  show("screen-tutorial");
+}
+function closeInstructions(){
+  state.reviewMode = false;
+  const s = state.session;
+  if(s && s.status === "in_progress" && s.stage === "task") renderTask();  // back to the review they were on
+  else renderHome();
+}
 function startOrResume(){
+  state.reviewMode = false;
   const s = state.session, profile = getProfile();
   if(s && s.status === "in_progress"){ resumeSession(); return; }
   if(s && s.status === "complete"){ startNextBatch(); return; }           // keep going in the same session
@@ -1003,6 +1001,7 @@ document.getElementById("tut-back-btn").addEventListener("click", () => {
 });
 document.getElementById("tut-next-btn").addEventListener("click", () => {
   if(state.tutStep < TUT_STEPS.length - 1){ state.tutStep++; renderTutorialStep(); window.scrollTo(0, 0); }
+  else if(state.reviewMode){ state.practiceIdx = 0; renderPractice(); }
   else startPractice();
 });
 
@@ -1077,16 +1076,19 @@ document.getElementById("practice-btn").addEventListener("click", () => {
     if(sel.label === null || sel.confidence === null) return;
     const p = PRACTICE[state.practiceIdx];
     const ok = sel.label === p.label;
-    if(ok){ state.session.practiceFirstTryCorrect++; saveSession(); }
+    if(ok && !state.reviewMode && state.session){ state.session.practiceFirstTryCorrect++; saveSession(); }
     const fb = document.getElementById("practice-feedback");
     fb.innerHTML = `<div class="feedback-panel ${ok ? "correct" : "incorrect"}">${ok ? COPY.practice.correctPrefix : COPY.practice.incorrectPrefix}${fmt(COPY.practice.answerTemplate, { label: labelName(p.label) })} ${p.explain}</div>`;
     lockChoice("practice");
     state.practiceChecked = true;
-    btn.textContent = state.practiceIdx < PRACTICE.length - 1 ? COPY.practice.nextBtn : COPY.practice.startBtn;
+    btn.textContent = state.practiceIdx < PRACTICE.length - 1 ? COPY.practice.nextBtn
+                    : (state.reviewMode ? COPY.practice.reviewDoneBtn : COPY.practice.startBtn);
     fb.scrollIntoView({ block: "nearest" });
   } else if(state.practiceIdx < PRACTICE.length - 1){
     state.practiceIdx++;
     renderPractice();
+  } else if(state.reviewMode){
+    closeInstructions();
   } else {
     startTask();
   }
@@ -1223,20 +1225,6 @@ document.getElementById("done-download-btn").addEventListener("click", () => {
   downloadCSV(rows, "review-study-" + s.participant.replace(/[^a-z0-9_-]/gi, "") + "-" + CONFIG.CONDITION + ".csv");
 });
 
-/* ======================= FEEDBACK ======================= */
-document.getElementById("feedback-submit-btn").addEventListener("click", () => {
-  const text = document.getElementById("feedback-text").value.trim();
-  if(!text) return;
-  queueRecord({
-    record_type: "feedback", record_id: uid(),
-    uniqname: state.session ? state.session.participant : "anonymous",
-    condition: CONFIG.CONDITION,
-    feedback: text,
-  });
-  document.getElementById("feedback-text").value = "";
-  document.getElementById("feedback-confirm").textContent = COPY.feedback.confirmMsg;
-});
-
 /* ======================= DATA VIEW (researcher) ======================= */
 function renderDataStats(){
   const db = getDB();
@@ -1359,11 +1347,6 @@ function applyStaticCopy(){
   setHTML("about-source-heading", A.sourceHeading);
   setHTML("about-source-body", A.sourceBody);
   setHTML("about-citation", A.citation);
-
-  setHTML("feedback-heading", COPY.feedback.heading);
-  setHTML("feedback-prompt", COPY.feedback.prompt);
-  document.getElementById("feedback-text").placeholder = COPY.feedback.placeholder;
-  setHTML("feedback-submit-btn", COPY.feedback.submitBtn);
 
   const D = COPY.data;
   setHTML("data-heading", D.heading);
